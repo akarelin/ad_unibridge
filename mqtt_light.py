@@ -19,17 +19,21 @@ class MQTTLight(mqtt.Mqtt):
     self.topic_prefix = prefix +'light/' + slug
     self.topic_set = self.topic_prefix+'/set'
     self.topic_status = self.topic_prefix
-    try:
-      self.parent = self.get_app(self.args["parent"])
-    except:
+    self.parent = self.get_app(self.args["parent"])
+    if not self.parent:
       self.l("Cannot find {}, got this instead {}", self.args["parent"], self.parent)
-    self.parent.topic = self.topic_status
+      return
+    else:
+      self.parent.topic = self.topic_status
+    # except:
+    #   self.l("Parent appears to be dead {}", self.parent)
     self.l("SET Topic {} | STATUS Topic {} | PARENT Topic {}", self.topic_set, self.topic_status, self.parent.topic)
     self.mqtt_listener = self.listen_event(self._mqtt_trigger, "MQTT_MESSAGE")
     # self.discover()
 
   def terminate(self):
-    self.cancel_listen_event(self.mqtt_listener)
+    if self.mqtt_listener:
+      self.cancel_listen_event(self.mqtt_listener)
 
   # def discover(self):
   #   self.log("Discovery Publishing")
