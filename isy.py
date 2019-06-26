@@ -3,11 +3,14 @@ import datetime
 
 class button(hass.Hass):
   def debug(self, message, *args):
-    if args:
-      self.log(message.format(*args), level="DEBUG")
-    else:
-      self.log(message, level="DEBUG")
-      
+    try:
+      if args:
+        self.log(message.format(*args), level="DEBUG")
+      else:
+        self.log(message, level="DEBUG")
+    except:
+      self.log("Debug Logger Failed {}".format(message))
+
   def initialize(self):
     self.debug("Initializing buttons {} to trigger device {}", self.args["buttons"], self.args["entity_id"])
     if isinstance(self.args["buttons"], str):

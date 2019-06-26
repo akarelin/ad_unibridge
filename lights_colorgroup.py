@@ -4,10 +4,14 @@ from datetime import datetime, time
 
 class colorgroup(hass.Hass):
   def debug(self, message, *args):
-    if args:
-      self.log(message.format(*args), level="DEBUG")
-    else:
-      self.log(message, level="DEBUG")
+    try:
+      if args:
+        self.log(message.format(*args), level="DEBUG")
+      else:
+        self.log(message, level="DEBUG")
+    except:
+      self.log("Debug Logger Failed {}".format(message))
+
 
   def initialize(self):
     self.state = 'OFF'

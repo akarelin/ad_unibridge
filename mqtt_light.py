@@ -4,10 +4,13 @@ import json
 
 class MQTTLight(mqtt.Mqtt):
   def debug(self, message, *args):
-    if args:
-      self.log(message.format(*args), level="DEBUG")
-    else:
-      self.log(message, level="DEBUG")
+    try:
+      if args:
+        self.log(message.format(*args), level="DEBUG")
+      else:
+        self.log(message, level="DEBUG")
+    except:
+      self.log("Debug Logger Failed {}".format(message))
 
   def initialize(self):
     try: prefix = self.args["prefix"]
@@ -28,7 +31,7 @@ class MQTTLight(mqtt.Mqtt):
       self.parent.topic = self.topic_status
 #    except:
 #      trace_log.log("Parent appears to be dead {}", self.parent)
-    self.debug("SET Topic {} | STATUS Topic {} | PARENT Topic {}", self.debugopic_set, self.debugopic_status, self.parent.topic)
+    self.debug("SET Topic {} | STATUS Topic {} | PARENT Topic {}", self.topic_set, self.topic_status, self.parent.topic)
     self.mqtt_listener = self.listen_event(self._mqtt_trigger, "MQTT_MESSAGE")
     # self.discover()
 
@@ -46,12 +49,12 @@ class MQTTLight(mqtt.Mqtt):
 
   #   config['schema'] = 'json'
   #   config['brightness'] = True
-  #   config['command_topic'] = self.debugopic_set
-  #   config['state_topic'] = self.debugopic_status
+  #   config['command_topic'] = self.topic_set
+  #   config['state_topic'] = self.topic_status
   #   config_json = json.dumps(config)
   #   self.l("Publishing config {}", config_json)
   #   self.log(config_json)
-  #   self.mqtt_publish(self.debugopic_prefix+'/config', config_json)
+  #   self.mqtt_publish(self.topic_prefix+'/config', config_json)
     
   def json_light(self, light):
     self.debug('JSON Light {}', light)
@@ -59,7 +62,7 @@ class MQTTLight(mqtt.Mqtt):
     if light['state'] == 'ON':
       self.debug("Processing ON {}", light)
     elif light['state'] == 'OFF':
-      self.f("Processing OFF {}", light)
+      self.debug("Processing OFF {}", light)
       self.parent.light_off()
       return
     else:
@@ -83,7 +86,7 @@ class MQTTLight(mqtt.Mqtt):
 #
   def _mqtt_trigger(self, event_name, data, kwargs):
     self.debug("Topic {} Payload {}", data['topic'], data['payload'])
-    if data['topic'] != self.debugopic_set:
+    if data['topic'] != self.topic_set:
       self.debug("Not our Topic {}", data['topic'])
       return
 

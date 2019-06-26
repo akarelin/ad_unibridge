@@ -4,10 +4,13 @@ from datetime import datetime, time
 
 class colorloop(hass.Hass):
   def debug(self, message, *args):
-    if args:
-      self.log(message.format(*args), level="DEBUG")
-    else:
-      self.log(message, level="DEBUG")
+    try:
+      if args:
+        self.log(message.format(*args), level="DEBUG")
+      else:
+        self.log(message, level="DEBUG")
+    except:
+      self.log("Debug Logger Failed {}".format(message))
 
   def initialize(self):
     self.state = 'OFF'
@@ -37,7 +40,6 @@ class colorloop(hass.Hass):
     self._update()
 
   def _update(self):
-    trace_log = self.get_user_log("trace_log")
     if self.state == 'ON':
       brightness = self.brightness
       self.debug("Brightness {}", brightness)
