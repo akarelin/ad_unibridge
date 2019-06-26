@@ -2,14 +2,26 @@ import appdaemon.plugins.hass.hassapi as hass
 import datetime
 
 class button(hass.Hass):
-  def debug(self, message, *args):
+  def _log(self, level, message, *args):
     try:
-      if args:
-        self.log(message.format(*args), level="DEBUG")
-      else:
-        self.log(message, level="DEBUG")
+      if args: self.log(message.format(*args), level=level)
+      else: self.log(message, level=level)
     except:
       self.log("Debug Logger Failed {}".format(message))
+  def warn(self, message, *args):
+    level = "WARN"
+    self._log(level, message, *args)
+  def debug(self, message, *args):
+    level = "INFO"
+    enabled = False
+    try: 
+      if self.args["debug"] == True:
+        enabled = True
+    except: 
+      pass
+    if not enabled: 
+      return
+    self._log(level, message, *args)
 
   def initialize(self):
     self.debug("Initializing buttons {} to trigger device {}", self.args["buttons"], self.args["entity_id"])
@@ -18,10 +30,10 @@ class button(hass.Hass):
     elif isinstance(self.args["buttons"], list):
       self.buttons = self.args["buttons"]
     else:
-      self.log("Buttons are invalid {}", self.args["buttons"])
+      self.warn("Buttons are invalid {}", self.args["buttons"])
       return
     self.set_namespace(self.args["namespace"])
-    self.listener = self.listen_event(self.cbEvent, "isy994_control")#, "isy994_control")
+    self.listener = self.listen_event(self.cbEvent, "isy994_control")
     self.entity_id = self.args["entity_id"]
   def terminate(self):
     self.cancel_listen_event(self.listener)
@@ -49,27 +61,46 @@ class button(hass.Hass):
 # If its DON, DOFF on any of our buttons - change the status of entity
 
 class indicator(hass.Hass):
+  def _log(self, level, message, *args):
+    try:
+      if args: self.log(message.format(*args), level=level)
+      else: self.log(message, level=level)
+    except:
+      self.log("Debug Logger Failed {}".format(message))
+  def warn(self, message, *args):
+    level = "WARN"
+    self._log(level, message, *args)
   def debug(self, message, *args):
-    if args:
-      self.log(message.format(*args), level="DEBUG")
-    else:
-      self.log(message, level="DEBUG")
+    level = "INFO"
+    enabled = False
+    try: 
+      if self.args["debug"] == True:
+        enabled = True
+    except: 
+      pass
+    if not enabled: 
+      return
+    self._log(level, message, *args)
 
   def initialize(self):
     self.debug("Initializing trigger {} and indicator {}", self.args["trigger"], self.args["indicator"])
-    
     if isinstance(self.args["on_value"], str):
       self.on_value = [self.args["on_value"]]
     elif isinstance(self.args["on_value"], list):
       self.on_value = self.args["on_value"]
     else:
-      self.log("On value is invalid {}", self.args["on_value"])
+      self.warn("On value is invalid {}", self.args["on_value"])
       return
 
     self.set_namespace(self.args["trigger_namespace"])
-    self.trigger = self.listen_state(self._trigger,
-      self.args["trigger"], duration=60, immediate=True,
-      namespace=self.args["trigger_namespace"])
+    try:
+      self.trigger = self.listen_state(self._trigger,
+        self.args["trigger"], duration=60, immediate=True,
+        namespace=self.args["trigger_namespace"])
+    except:
+      self.warn("Listener for trigger {} failed", self.args["trigger"])
+      return
+
     self.indicator = self.listen_state(self._indicator,
       self.args["indicator"],
       duration=60, immediate=True,
@@ -103,10 +134,10 @@ class indicator(hass.Hass):
     self.debug("Indicator state {}", repr(indicator_state))
     
     if trigger_state in self.on_value and indicator_state == 'off':
-      self.log("Turning indicator {} on", self.args["indicator"])
+      self.log("Turning indicator {} on".format(self.args["indicator"]))
       self.turn_on(self.args["indicator"], namespace = self.args["indicator_namespace"])
     elif trigger_state not in self.on_value and indicator_state != 'off':
-      self.log("Turning indicator {} off", self.args["indicator"])
+      self.log("Turning indicator {} off".format(self.args["indicator"]))
       self.turn_off(self.args["indicator"], namespace = self.args["indicator_namespace"])
     else:
       self.debug("Not changing indicator {}", self.args["indicator"])

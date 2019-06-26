@@ -3,14 +3,26 @@ import json
 #from datetime import datetime, time
 
 class MQTTLight(mqtt.Mqtt):
-  def debug(self, message, *args):
+  def _log(self, level, message, *args):
     try:
-      if args:
-        self.log(message.format(*args), level="DEBUG")
-      else:
-        self.log(message, level="DEBUG")
+      if args: self.log(message.format(*args), level=level)
+      else: self.log(message, level=level)
     except:
       self.log("Debug Logger Failed {}".format(message))
+  def warn(self, message, *args):
+    level = "WARN"
+    self._log(level, const_warn_level, message, *args)
+  def debug(self, message, *args):
+    level = "INFO"
+    enabled = False
+    try: 
+      if self.args["debug"] == True:
+        enabled = True
+    except: 
+      pass
+    if not enabled: 
+      return
+    self._log(level, message, *args)
 
   def initialize(self):
     try: prefix = self.args["prefix"]
