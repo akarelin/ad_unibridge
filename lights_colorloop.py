@@ -3,10 +3,11 @@ import json
 from datetime import datetime, time
 
 class colorloop(hass.Hass):
-  def l(self, message, *args):
-    try: debug = self.args["debug"]
-    except: debug = False
-    if debug: self.log(message.format(*args))
+  def debug(self, message, *args):
+    if args:
+      self.log(message.format(*args), level="DEBUG")
+    else:
+      self.log(message, level="DEBUG")
 
   def initialize(self):
     self.state = 'OFF'
@@ -28,36 +29,37 @@ class colorloop(hass.Hass):
   def light_on(self, brightness = 128):
     self.state = 'ON'
     self.brightness = brightness
-    self.l("Switching on")
+    self.debug("Switching on")
     self._update()
   def light_off(self):
     self.state = 'OFF'
-    self.l("Switching off")
+    self.debug("Switching off")
     self._update()
 
   def _update(self):
+    trace_log = self.get_user_log("trace_log")
     if self.state == 'ON':
       brightness = self.brightness
-      self.l("Brightness {}", brightness)
+      self.debug("Brightness {}", brightness)
 
       now=self.datetime()
       midnight=self.datetime().replace(hour=0,minute=0,second=0,microsecond=0)
       seconds=(now-midnight).seconds
       modulo=(seconds%(self.period*60))/10
-      self.l("Seconds {}, period {}, modulo {}", seconds, self.period, modulo)
+      self.debug("Seconds {}, period {}, modulo {}", seconds, self.period, modulo)
 
     entities = enumerate(self.args["entities"])
     l = len(self.args["entities"])
     for i,entity in entities:
       if self.state == 'ON':
         hscolor=int((modulo+i*360/l)%360)
-        self.l("Setting color for {} to {}", entity, hscolor)
+        self.debug("Setting color for {} to {}", entity, hscolor)
         self.turn_on(entity, hs_color=[hscolor,100], brightness=self.brightness)
       elif self.state == 'OFF':
-        self.l("Turning off")
+        self.debug("Turning off")
         self.turn_off(entity)
       else:
-        self.l("Unkown state {}".format(self.state))
+        self.debug("Unkown state {}".format(self.state))
     
     status = {}
     status['state']=self.state
@@ -65,7 +67,7 @@ class colorloop(hass.Hass):
       status['brightness']=self.brightness
     status_json = json.dumps(status)
     if self.topic:
-      self.l("Status Publish to Topic {} Payload {}", self.topic, status_json)
+      self.debug("Status Publish to Topic {} Payload {}", self.topic, status_json)
       self.call_service("mqtt/publish", topic=self.topic, payload=status_json)
     else:
-      self.l("No status topic")
+      self.debug("No status topic")

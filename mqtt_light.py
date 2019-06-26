@@ -3,11 +3,12 @@ import json
 #from datetime import datetime, time
 
 class MQTTLight(mqtt.Mqtt):
-  def l(self, message, *args):
-    try: debug = self.args["debug"]
-    except: debug = False
-    if debug: self.log(message.format(*args))
-  
+  def debug(self, message, *args):
+    if args:
+      self.log(message.format(*args), level="DEBUG")
+    else:
+      self.log(message, level="DEBUG")
+
   def initialize(self):
     try: prefix = self.args["prefix"]
     except: prefix = ''
@@ -21,19 +22,21 @@ class MQTTLight(mqtt.Mqtt):
     self.topic_status = self.topic_prefix
     self.parent = self.get_app(self.args["parent"])
     if not self.parent:
-      self.l("Cannot find {}, got this instead {}", self.args["parent"], self.parent)
+      self.debug("Cannot find {}, got this instead {}", self.args["parent"], self.parent)
       return
     else:
       self.parent.topic = self.topic_status
-    # except:
-    #   self.l("Parent appears to be dead {}", self.parent)
-    self.l("SET Topic {} | STATUS Topic {} | PARENT Topic {}", self.topic_set, self.topic_status, self.parent.topic)
+#    except:
+#      trace_log.log("Parent appears to be dead {}", self.parent)
+    self.debug("SET Topic {} | STATUS Topic {} | PARENT Topic {}", self.debugopic_set, self.debugopic_status, self.parent.topic)
     self.mqtt_listener = self.listen_event(self._mqtt_trigger, "MQTT_MESSAGE")
     # self.discover()
 
   def terminate(self):
-    if self.mqtt_listener:
+    try:
       self.cancel_listen_event(self.mqtt_listener)
+    except:
+      pass
 
   # def discover(self):
   #   self.log("Discovery Publishing")
@@ -43,32 +46,32 @@ class MQTTLight(mqtt.Mqtt):
 
   #   config['schema'] = 'json'
   #   config['brightness'] = True
-  #   config['command_topic'] = self.topic_set
-  #   config['state_topic'] = self.topic_status
+  #   config['command_topic'] = self.debugopic_set
+  #   config['state_topic'] = self.debugopic_status
   #   config_json = json.dumps(config)
   #   self.l("Publishing config {}", config_json)
   #   self.log(config_json)
-  #   self.mqtt_publish(self.topic_prefix+'/config', config_json)
+  #   self.mqtt_publish(self.debugopic_prefix+'/config', config_json)
     
   def json_light(self, light):
-    self.l('JSON Light {}', light)
+    self.debug('JSON Light {}', light)
     
     if light['state'] == 'ON':
-      self.l("Processing ON {}",light)
+      self.debug("Processing ON {}", light)
     elif light['state'] == 'OFF':
-      self.l("Processing OFF {}",light)
+      self.f("Processing OFF {}", light)
       self.parent.light_off()
       return
     else:
-      self.log("Unknown state {}".format(state))
+      self.log("Unknown state {}", state)
       return
 
     try:
       brightness = int(light['brightness'])
-      self.l("Setting brightness to {}", brightness)
+      self.debug("Setting brightness to {}", brightness)
     except:
       brightness = None
-      self.l("Default Brightness")
+      self.debug("Default Brightness")
 
     if brightness is None:
       self.parent.light_on()
@@ -79,22 +82,22 @@ class MQTTLight(mqtt.Mqtt):
 #
 #
   def _mqtt_trigger(self, event_name, data, kwargs):
-    self.l("Topic {} Payload {}", data['topic'], data['payload'])
-    if data['topic'] != self.topic_set:
-      self.l("Not our Topic {}".format(data['topic']))
+    self.debug("Topic {} Payload {}", data['topic'], data['payload'])
+    if data['topic'] != self.debugopic_set:
+      self.debug("Not our Topic {}", data['topic'])
       return
 
     if data['payload'] in ['ON','OFF']:
       light['state']=data['payload']
-      self.l("Binary state {}", state)
+      self.debug("Binary state {}", state)
     else:
       try:
         payload = json.loads(data['payload'])
         payload['state']=payload['state'].upper()
-        self.l("JSON payload {}", payload)
+        self.debug("JSON payload {}", payload)
         light = payload
       except:
-        self.log("Invalid Payload {}".format(data['payload']))
+        self.debug("Invalid Payload {}", data['payload'])
         return
     self.json_light(light)
 
@@ -152,11 +155,11 @@ class MQTTLight(mqtt.Mqtt):
 #    self.set_namespace(self.args["namespace"])
 #    self.log("!!!!! {} {}".format(self.args["entity_id"],self.args["namespace"]))
 #    self.hass_handle = hass.listen_state(namespace=self.args["namespace"], cb = self._hass_state, entity = self.args["entity_id"], attribute="All" )
-#    self.timer = self.run_every(self._timer, self.datetime(), self.args["precision"])
+#    self.debugimer = self.run_every(self._timer, self.datetime(), self.args["precision"])
 
 #  def terminate(self):
 #    self.cancel_listen_state(self.hass_handle)
-#    self.cancel_timer(self.timer)
+#    self.cancel_timer(self.debugimer)
 
 #  def _hass_state(self, entity, attribute, old, new, kwargs):
 #    self.publish()

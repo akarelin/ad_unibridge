@@ -3,10 +3,11 @@ import json
 from datetime import datetime, time
 
 class colorgroup(hass.Hass):
-  def l(self, message, *args):
-    try: debug = self.args["debug"]
-    except: debug = False
-    if debug: self.log(message.format(*args))
+  def debug(self, message, *args):
+    if args:
+      self.log(message.format(*args), level="DEBUG")
+    else:
+      self.log(message, level="DEBUG")
 
   def initialize(self):
     self.state = 'OFF'
@@ -26,17 +27,17 @@ class colorgroup(hass.Hass):
   def light_on(self, brightness = 128):
     self.state = 'ON'
     self.brightness = brightness
-    self.l("Switching on")
+    self.debug("Switching on")
     self._update()
   def light_off(self):
     self.state = 'OFF'
-    self.l("Switching off")
+    self.debug("Switching off")
     self._update()
 
   def _update(self):
     if self.state == 'ON':
       brightness = self.brightness
-      self.l("Brightness {}", brightness)
+      self.debug("Brightness {}", brightness)
 
     entities = enumerate(self.args["entities"])
     l = len(self.args["entities"])
@@ -44,10 +45,10 @@ class colorgroup(hass.Hass):
       if self.state == 'ON':
         self.turn_on(entity, rgb_color=self.rgb_color, brightness=self.brightness)
       elif self.state == 'OFF':
-        self.l("Turning off")
+        self.debug("Turning off")
         self.turn_off(entity)
       else:
-        self.l("Unkown state {}".format(self.state))
+        self.debug("Unkown state {}".format(self.state))
     
     status = {}
     status['state']=self.state
@@ -57,7 +58,7 @@ class colorgroup(hass.Hass):
       status['rgb_color']=self.rgb_color
     status_json = json.dumps(status)
     if self.topic:
-      self.l("Status Publish to Topic {} Payload {}", self.topic, status_json)
+      self.debug("Status Publish to Topic {} Payload {}", self.topic, status_json)
       self.call_service("mqtt/publish", topic=self.topic, payload=status_json)
     else:
-      self.l("No status topic")
+      self.debug("No status topic")
