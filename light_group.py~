@@ -1,0 +1,7 @@
+import adbase as ad
+import adapi as adapi
+
+class light_group(ad.ADBase):
+  def initialize(self):
+    self.adbase = self.get_ad_api()
+#    handle = self.adbase.run_in(callback, 20)
