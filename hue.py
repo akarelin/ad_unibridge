@@ -1,17 +1,9 @@
-import appdaemon.plugins.hass.hassapi as hass
+#import appdaemon.plugins.hass.hassapi as hass
+import unibridge_base
 import json
 from datetime import datetime, time
 
-class group(hass.Hass):
-  def debug(self, message, *args):
-    try:
-      if args:
-        self.log(message.format(*args), level="DEBUG")
-      else:
-        self.log(message, level="DEBUG")
-    except:
-      self.log("Debug Logger Failed {}".format(message))
-
+class group(base.AppHass):
   def initialize(self):
     self.state = 'OFF'
     self.topic = None
@@ -61,16 +53,7 @@ class group(hass.Hass):
     else:
       self.debug("No status topic")
 
-class loop(hass.Hass):
-  def debug(self, message, *args):
-    try:
-      if args:
-        self.log(message.format(*args), level="DEBUG")
-      else:
-        self.log(message, level="DEBUG")
-    except:
-      self.log("Debug Logger Failed {}".format(message))
-
+class colorloop(base.AppHass):
   def initialize(self):
     self.state = 'OFF'
     self.topic = None

@@ -1,8 +1,8 @@
-import appdaemon.plugins.mqtt.mqttapi as mqtt
 import json
+import unibridge_base
 #from datetime import datetime, time
 
-class device_tracker(mqtt.Mqtt):
+class device_tracker(mqtt.AppMqtt):
   def _log(self, level, message, *args):
     try:
       if args: self.log(message.format(*args), level=level)

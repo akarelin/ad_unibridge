@@ -1,4 +1,4 @@
-import appdaemon.plugins.hass.hassapi as hass
+import unibridge_base
 import json
 import datetime
 
@@ -13,28 +13,7 @@ import datetime
 #   indicator_topic: insteon/kp/entry/state/5
 #   indicator_broker: sway_hassio
 #   
-class mqtt_switch(hass.Hass):
-  def _log(self, level, message, *args):
-    try:
-      if args: self.log(message.format(*args), level=level)
-      else: self.log(message, level=level)
-    except:
-      self.log("Debug Logger Failed {}".format(message))
-  def warn(self, message, *args):
-    level = "WARN"
-    self._log(level, message, *args)
-  def debug(self, message, *args):
-    level = "INFO"
-    enabled = False
-    try: 
-      if self.args["debug"] == True:
-        enabled = True
-    except: 
-      pass
-    if not enabled: 
-      return
-    self._log(level, message, *args)
-
+class mqtt_switch(base.AppHass):
   def initialize(self):
     self.debug("Initializing trigger {} and indicator {}", self.args["trigger"], self.args["indicator_topic"])
     if isinstance(self.args["on_value"], str):
@@ -99,28 +78,7 @@ class mqtt_switch(hass.Hass):
 #   i2mqtt_group: 18
 #   i2mqtt_broker: sway_hassio
 
-class i2mqtt_group(hass.Hass):
-  def _log(self, level, message, *args):
-    try:
-      if args: self.log(message.format(*args), level=level)
-      else: self.log(message, level=level)
-    except:
-      self.log("Debug Logger Failed {}".format(message))
-  def warn(self, message, *args):
-    level = "WARN"
-    self._log(level, message, *args)
-  def debug(self, message, *args):
-    level = "INFO"
-    enabled = False
-    try: 
-      if self.args["debug"] == True:
-        enabled = True
-    except: 
-      pass
-    if not enabled: 
-      return
-    self._log(level, message, *args)
-
+class i2mqtt_group(base.AppHass):
   def initialize(self):
     self.topic = "insteon/scene/modem"
     self.debug("Initializing trigger {} and indicator {}", self.args["trigger"], self.args["i2mqtt_group"])

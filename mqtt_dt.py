@@ -1,30 +1,8 @@
-#import appdaemon.plugins.mqtt.mqttapi as mqtt
-import appdaemon.plugins.hass.hassapi as hass
+import unibridge_base
 import json
 import datetime
 
-class MQTT_DT(hass.Hass):
-  def _log(self, level, message, *args):
-    try:
-      if args: self.log(message.format(*args), level=level)
-      else: self.log(message, level=level)
-    except:
-      self.log("Debug Logger Failed {}".format(message))
-  def warn(self, message, *args):
-    level = "WARN"
-    self._log(level, message, *args)
-  def debug(self, message, *args):
-    level = "INFO"
-    enabled = False
-    try: 
-      if self.args["debug"] == True:
-        enabled = True
-    except: 
-      pass
-    if not enabled: 
-      return
-    self._log(level, message, *args)
-
+class MQTT_DT(hass.AppHass):
   def initialize(self):
     if isinstance(self.args["entity_prefix"], str):
       self.entity_prefix = self.args["entity_prefix"]
@@ -76,7 +54,6 @@ class MQTT_DT(hass.Hass):
       self.debug("~~~~~~~ Timer processing entity {} with state {}", e, state)
       if state  == 'home':
         self.publish(e)
-
 
   def _trigger(self, entity, attribute, old, new, kwargs):
     if entity in [*self.trackers]:
