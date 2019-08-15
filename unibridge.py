@@ -1,5 +1,3 @@
-#from appdaemon.plugins.hass import hassapi
-#import appdaemon.plugins.mqtt.mqttapi as mqtt
 from appdaemon.plugins.hass import hassapi
 from appdaemon.plugins.mqtt import mqttapi
 from datetime import datetime, time

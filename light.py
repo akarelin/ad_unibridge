@@ -2,6 +2,7 @@
 import unibridge
 import json
 from datetime import datetime, time
+from typing import Any, Dict, List, Optional, Set, Union
 
 """
 bedroom_ambient:
@@ -17,32 +18,55 @@ bedroom_ambient:
   effect: None
   rgb_color: [255,116,22]
 
-  state_entities:
+  members:
     - light.hue_bedroom_1 @ sway_hassio
     - light.hue_bedroom_2 @ sway_hassio
     - light.hue_bedroom_3 @ sway_hassio
-  state_indicators:
+  
+  indicators:
     - 'insteon/kp/wall/state/1' @ sway_mqtt
     - 'insteon/kp/desk/state/1' @ sway_mqtt
-  control_entities:
+  definitive_state:
     - light.hue_bedroom @ sway_hassio
   control_indicators:
     - 'insteon/kp/wall/set/1' @ sway_mqtt
     - 'insteon/kp/desk/set/1' @ sway_mqtt
-
-  
+ 
 """
 
 class group(unibridge.AppHybrid):
   def initialize(self):
     super().initialize()
-    self.state = 'OFF'
-    self.brightness = 0
-    # self.topic_state = None
-    # self.topic_set = None
-    # self.init()
+    self._load_config()
+    self.debug("Members {}",self.members)
+    self.debug("Definitive State {}",self.definitive_state)
+    self.debug("Indicators {}",self.definitive_state)
+
+  def _load_config(self):
+    self.members = self._load_entity_list(self.args['members'])
+    self.definitive_state = self._load_entity_list(self.args['definitive_state'])
+    self.indicators = self._load_entity_list(self.args['indicators'])
+  
   def _mqtt(self, event_name, data, kwargs):
     self.debug("Topic {} Payload {}", data['topic'], data['payload'])
+  
+  @staticmethod
+  def _load_entity_list(arg):
+    entity_list = []
+    for m in arg:
+      e = m.split(' @ ')[0]
+      n = m.split(' @ ')[1]
+      if 'mqtt' in n: t = 'MQTT'
+      elif 'hass' in n: t = 'Hassio'
+      else:
+        self.error("Invalid member {}", m)
+        return
+      member = {}
+      member['type'] = t
+      member['namespace'] = n
+      member['entity'] = e
+      entity_list.append(member)
+    return entity_list
 
   # def init(self):
   #   self.set_namespace(self.args["namespace"])

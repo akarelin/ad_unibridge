@@ -1,0 +1,27 @@
+sample_light:
+  module: light
+  class: group
+  dependencies:
+    - mqtt
+  namespace: sway_hassio
+  debug: true
+
+  name: "Bedroom Lamps"
+  topic: 'bedroom/ambient'
+
+  effect: None
+  rgb_color: [255,116,22]
+
+  members:
+    - light.hue_bedroom_1 @ sway_hassio
+    - light.hue_bedroom_2 @ sway_hassio
+    - light.hue_bedroom_3 @ sway_hassio
+  
+  indicators:
+    - insteon/kp/wall/state/1 @ sway_mqtt
+    - insteon/kp/desk/state/1 @ sway_mqtt
+  definitive_state:
+    - light.hue_bedroom @ sway_hassio
+  control_indicators:
+    - insteon/kp/wall/set/1 @ sway_mqtt
+    - insteon/kp/desk/set/1 @ sway_mqtt
