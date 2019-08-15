@@ -2,15 +2,22 @@ import json
 import unibridge
 #from datetime import datetime, time
 
-class mqtt(unibridge.AppMqtt):
+class mqttRepublish(unibridge.AppMqtt):
   def initialize(self):
     try: self.topics = self.args["topics"]
-    except: self.topic = "#"
+    except: self.topics = ["#"]
     self.set_namespace(self.args['namespace'])
+    for t in self.topics:
+      self.mqtt_subscribe(t)
 
-  def subscribe(self, topic, callback):
-    self.mqtt_subscribe(self.topic)
-    self.listen_event(callback, "MQTT_MESSAGE")
+class mqttRepublishTest(unibridge.AppHass):
+  def initialize(self):
+    self.set_namespace(self.args["namespace"])
+    self.parent = self.get_app(self.args['parent'])
+    self.parent.listen_event(self._mqtt, "MQTT_MESSAGE")
+
+  def _mqtt(self, event_name, data, kwargs):
+    self.debug("Topic {} Payload {}", data['topic'], data['payload'])
 
   # def terminate(self):
   #   try:
