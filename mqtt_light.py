@@ -1,28 +1,17 @@
-import unibridge_base
+import unibridge
 import json
 #from datetime import datetime, time
 
-class MQTTLight(mqtt.AppMqtt):
+class mqtt_light(unibridge.AppMqtt):
   def initialize(self):
-    try: prefix = self.args["prefix"]
-    except: prefix = ''
-    try: slug = self.args["slug"]
-    except:
-      self.log("Slug not provided")
-      return
-      
-    self.topic_prefix = prefix +'light/' + slug
-    self.topic_set = self.topic_prefix+'/set'
-    self.topic_status = self.topic_prefix
     self.parent = self.get_app(self.args["parent"])
-    if not self.parent:
-      self.debug("Cannot find {}, got this instead {}", self.args["parent"], self.parent)
-      return
-    else:
-      self.parent.topic = self.topic_status
-#    except:
-#      trace_log.log("Parent appears to be dead {}", self.parent)
-    self.debug("SET Topic {} | STATUS Topic {} | PARENT Topic {}", self.topic_set, self.topic_status, self.parent.topic)
+    self.set_namespace(self.parent.args["mqtt_namespace"])
+
+    topic = 'light/' + self.parent.args["topic"]
+    self.parent.topic_set = topic+'/set'
+    self.parent.topic_state = topic+'/state'
+
+    self.debug("SET Topic {} | STATUS Topic {}", self.parent.topic_set, self.parent.topic_state)
     self.mqtt_listener = self.listen_event(self._mqtt_trigger, "MQTT_MESSAGE")
     # self.discover()
 
@@ -32,21 +21,6 @@ class MQTTLight(mqtt.AppMqtt):
     except:
       pass
 
-  # def discover(self):
-  #   self.log("Discovery Publishing")
-  #   config = {}
-  #   config['name'] = self.args["name"]
-  #   config['uniq_id'] = "light."+self.args["slug"]
-
-  #   config['schema'] = 'json'
-  #   config['brightness'] = True
-  #   config['command_topic'] = self.topic_set
-  #   config['state_topic'] = self.topic_status
-  #   config_json = json.dumps(config)
-  #   self.l("Publishing config {}", config_json)
-  #   self.log(config_json)
-  #   self.mqtt_publish(self.topic_prefix+'/config', config_json)
-    
   def json_light(self, light):
     self.debug('JSON Light {}', light)
     
@@ -72,12 +46,9 @@ class MQTTLight(mqtt.AppMqtt):
     else:
       self.parent.light_on(brightness)
 
-#
-#
-#
   def _mqtt_trigger(self, event_name, data, kwargs):
     self.debug("Topic {} Payload {}", data['topic'], data['payload'])
-    if data['topic'] != self.topic_set:
+    if data['topic'] != self.parent.topic_set:
       self.debug("Not our Topic {}", data['topic'])
       return
 
@@ -94,3 +65,19 @@ class MQTTLight(mqtt.AppMqtt):
         self.debug("Invalid Payload {}", data['payload'])
         return
     self.json_light(light)
+
+  # def discover(self):
+  #   self.log("Discovery Publishing")
+  #   config = {}
+  #   config['name'] = self.args["name"]
+  #   config['uniq_id'] = "light."+self.args["slug"]
+
+  #   config['schema'] = 'json'
+  #   config['brightness'] = True
+  #   config['command_topic'] = self.topic_set
+  #   config['state_topic'] = self.topic_status
+  #   config_json = json.dumps(config)
+  #   self.l("Publishing config {}", config_json)
+  #   self.log(config_json)
+  #   self.mqtt_publish(self.topic_prefix+'/config', config_json)
+    

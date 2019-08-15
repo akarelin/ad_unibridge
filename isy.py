@@ -1,7 +1,7 @@
-import unibridge_base
+import unibridge
 import datetime
 
-class button(hass.AppHass):
+class button(unibridge.AppHass):
   def initialize(self):
     self.debug("Initializing buttons {} to trigger device {}", self.args["buttons"], self.args["entity_id"])
     if isinstance(self.args["buttons"], str):
@@ -39,7 +39,7 @@ class button(hass.AppHass):
       self.debug("Not our command {}", command)
 # If its DON, DOFF on any of our buttons - change the status of entity
 
-class indicator(hass.AppHass):
+class indicator(unibridge.AppHass):
   def initialize(self):
     self.debug("Initializing trigger {} and indicator {}", self.args["trigger"], self.args["indicator"])
     if isinstance(self.args["on_value"], str):

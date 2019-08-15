@@ -1,0 +1,36 @@
+# test_mqtt:
+#   module: test
+#   class: testMqtt
+#   debug: false
+#   namespace: sway_hassio
+ 
+# test:
+#   module: test
+#   class: testHass
+#   debug: True
+#   namespace: sway_hassio
+
+test_mqtt:
+  module: mqtt
+  class: mqtt
+  namespace: sway_hassio
+  topic: 'light/colorloop/set'
+
+test_colorloop:
+  module: test
+  class: test_colorloop
+  namespace: sway_hassio
+  
+  name: "Colorloop"
+  topic: 'colorloop'
+  topic_namespace: sway_hassio
+
+  entities:
+    - light.hue_corner
+  entity_namespace: sway_hassio
+
+  effect: colorloop
+  period: 60
+  precision: 5
+  
+  debug: true

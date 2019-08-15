@@ -1,8 +1,8 @@
-import unibridge_base
+import unibridge
 import json
 import datetime
 
-class MQTT_DT(hass.AppHass):
+class MQTT_DT(unibridge.AppHass):
   def initialize(self):
     if isinstance(self.args["entity_prefix"], str):
       self.entity_prefix = self.args["entity_prefix"]

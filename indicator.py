@@ -1,4 +1,4 @@
-import unibridge_base
+import unibridge
 import json
 import datetime
 
@@ -13,7 +13,7 @@ import datetime
 #   indicator_topic: insteon/kp/entry/state/5
 #   indicator_broker: sway_hassio
 #   
-class mqtt_switch(base.AppHass):
+class mqtt_switch(unibridge.AppHass):
   def initialize(self):
     self.debug("Initializing trigger {} and indicator {}", self.args["trigger"], self.args["indicator_topic"])
     if isinstance(self.args["on_value"], str):
@@ -78,7 +78,7 @@ class mqtt_switch(base.AppHass):
 #   i2mqtt_group: 18
 #   i2mqtt_broker: sway_hassio
 
-class i2mqtt_group(base.AppHass):
+class i2mqtt_group(unibridge.AppHass):
   def initialize(self):
     self.topic = "insteon/scene/modem"
     self.debug("Initializing trigger {} and indicator {}", self.args["trigger"], self.args["i2mqtt_group"])

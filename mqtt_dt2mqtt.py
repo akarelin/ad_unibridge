@@ -1,8 +1,8 @@
-import unibridge_base
+import unibridge
 import json
 #from datetime import datetime, time
 
-class Unifi2DT(mqtt.AppMqtt):
+class Unifi2DT(unibridge.AppMqtt):
   def initialize(self):
     try: self.topic = self.args["topic"]
     except: self.topic = "unifi/+/status/wifi/+/client/+"

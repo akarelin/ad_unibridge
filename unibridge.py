@@ -1,5 +1,9 @@
+#from appdaemon.plugins.hass import hassapi
+#import appdaemon.plugins.mqtt.mqttapi as mqtt
 from appdaemon.plugins.hass import hassapi
-import appdaemon.plugins.mqtt.mqttapi as mqtt
+from appdaemon.plugins.mqtt import mqttapi
+from datetime import datetime, time
+
 from appdaemon.utils import __version__ as AD_VERSION
 
 LOG_PREFIX_NONE = ""
@@ -38,14 +42,17 @@ class AppHass(hassapi.Hass):
     def warn(self, message, *args):
         self._log("WARNING", LOG_PREFIX_WARNING, message, *args)
 
+    def error(self, message, *args):
+        self._log("ERROR", LOG_PREFIX_ALERT, message, *args)
+
     def debug(self, message, *args):
         try: 
             if self.args.get("debug"):
-                self._log("DEBUG", LOG_PREFIX_STATUS, message, *args)
+                self._log("INFO", LOG_PREFIX_STATUS, message, *args)
         except:
             self._log("ERROR", LOG_PREFIX_WARNING, "Exception with debug")
 
-class AppMqtt(mqtt.Mqtt):
+class AppMqtt(mqttapi.Mqtt):
     class Meta:
         """
         Unibridge MQTT Base Class
@@ -67,9 +74,12 @@ class AppMqtt(mqtt.Mqtt):
     def warn(self, message, *args):
         self._log("WARNING", LOG_PREFIX_WARNING, message, *args)
 
+    def error(self, message, *args):
+        self._log("ERROR", LOG_PREFIX_ALERT, message, *args)
+
     def debug(self, message, *args):
         try: 
             if self.args.get("debug"):
-                self._log("DEBUG", LOG_PREFIX_STATUS, message, *args)
+                self._log("INFO", LOG_PREFIX_STATUS, message, *args)
         except:
             self._log("ERROR", LOG_PREFIX_WARNING, "Exception with debug")
