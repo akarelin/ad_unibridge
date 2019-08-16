@@ -33,31 +33,115 @@ bedroom_ambient:
     - 'insteon/kp/desk/set/1' @ sway_mqtt
  
 """
+# Bitfield of features supported by the light entity
+SUPPORT_BRIGHTNESS = 1
+SUPPORT_COLOR_TEMP = 2
+SUPPORT_EFFECT = 4
+SUPPORT_FLASH = 8
+SUPPORT_COLOR = 16
+SUPPORT_TRANSITION = 32
+SUPPORT_WHITE_VALUE = 128
+
+# Integer that represents transition time in seconds to make change.
+ATTR_TRANSITION = "transition"
+
+# Lists holding color values
+ATTR_RGB_COLOR = "rgb_color"
+ATTR_XY_COLOR = "xy_color"
+ATTR_HS_COLOR = "hs_color"
+ATTR_COLOR_TEMP = "color_temp"
+ATTR_KELVIN = "kelvin"
+ATTR_MIN_MIREDS = "min_mireds"
+ATTR_MAX_MIREDS = "max_mireds"
+ATTR_COLOR_NAME = "color_name"
+ATTR_WHITE_VALUE = "white_value"
+
+# Brightness of the light, 0..255 or percentage
+ATTR_BRIGHTNESS = "brightness"
+ATTR_BRIGHTNESS_PCT = "brightness_pct"
+
+# String representing a profile (built-in ones or external defined).
+ATTR_PROFILE = "profile"
+
+# If the light should flash, can be FLASH_SHORT or FLASH_LONG.
+ATTR_FLASH = "flash"
+FLASH_SHORT = "short"
+FLASH_LONG = "long"
+
+# List of possible effects
+ATTR_EFFECT_LIST = "effect_list"
+
+# Apply an effect to the light, can be EFFECT_COLORLOOP.
+ATTR_EFFECT = "effect"
+EFFECT_COLORLOOP = "colorloop"
+EFFECT_RANDOM = "random"
+EFFECT_WHITE = "white"
+
+# Light Types
+TYPE_HASS = "HASS"
+TYPE_MQTT = "MQTT"
+# Light States
+STATE_ON = "ON"
+STATE_OFF = "OFF"
+STATE_UNKNOWN = None
+LIGHT_STATES = [STATE_ON, STATE_OFF, STATE_UNKNOWN]
+# Ignoder Attributes
+IGNORE_STATES = [
+  'attributes',
+  'context'
+]
+IGNORE_ATTRIBUTES = [
+  'custom_ui_state_card',
+  'state_card_mode',
+  'stretch_slider',
+  'max_mireds',
+  'min_mireds'
+]
 
 class group(unibridge.AppHybrid):
+  @property
+  def is_on(self):
+    return self._state
+  
+  @property
+  def brightness(self):
+    return self._brightness
+  
+  members = []
+  _state = STATE_UNKNOWN
+  _brightness = None
+
+  def update(self):
+    self._update_hass_members()
+    self._recalculate()
+      
   def initialize(self):
     super().initialize()
     self._load_config()
-    self.debug("Members {}",self.members)
-    self.debug("Definitive State {}",self.definitive_state)
-    self.debug("Indicators {}",self.definitive_state)
+    self.update()
+    self.debug("~~~ Current state {}", self.members)
 
+  
+  def _mqtt(self, event_name, data, kwargs):
+    return
+    self.debug("Topic {} Payload {}", data['topic'], data['payload'])
+
+  """
+  Loading
+  """
   def _load_config(self):
     self.members = self._load_entity_list(self.args['members'])
     self.definitive_state = self._load_entity_list(self.args['definitive_state'])
     self.indicators = self._load_entity_list(self.args['indicators'])
-  
-  def _mqtt(self, event_name, data, kwargs):
-    self.debug("Topic {} Payload {}", data['topic'], data['payload'])
-  
-  @staticmethod
-  def _load_entity_list(arg):
+
+  def _load_entity_list(self, arg):
     entity_list = []
     for m in arg:
-      e = m.split(' @ ')[0]
-      n = m.split(' @ ')[1]
-      if 'mqtt' in n: t = 'MQTT'
-      elif 'hass' in n: t = 'Hassio'
+      e = m.split(' @ ')[0].lower()
+      n = m.split(' @ ')[1].lower()
+      self.debug("Parsing {} => {} {}",m,e,n)
+      if TYPE_MQTT.lower() in n: t = TYPE_MQTT
+      elif TYPE_HASS.lower() in n: t = TYPE_HASS
       else:
         self.error("Invalid member {}", m)
         return
@@ -65,8 +149,55 @@ class group(unibridge.AppHybrid):
       member['type'] = t
       member['namespace'] = n
       member['entity'] = e
+      member['state'] = STATE_UNKNOWN
+      member['brightness'] = None
+      member['attributes'] = {}
       entity_list.append(member)
     return entity_list
+
+  """
+  State Calculation
+  """
+  def _recalculate(self):
+    b = []
+    s = STATE_UNKNOWN
+    for i,member in enumerate(self.members):
+      if member['state'] == STATE_ON:
+        s = STATE_ON
+        try:
+          b.append(int(member['attributes']['brightness']))
+        except:
+          pass
+      elif s == STATE_UNKNOWN and member['state'] == STATE_OFF:
+        s = STATE_OFF
+    
+    self._state = s
+    if len(b) > 0:
+      self._brightness = sum(b)
+    else:
+      self._brightness = None
+
+  def _update_hass_members(self):
+    for i,member in enumerate(self.members):
+      if member['type'] == TYPE_HASS:
+        state = self.get_state(member['entity'], attribute="all")
+        if not state:
+          self.warn("Entity {} not found",member['entity'])
+          continue
+        attributes = state['attributes']
+        
+        for s in IGNORE_STATES:
+          if s in state: del state[s]
+        for a in IGNORE_ATTRIBUTES:
+          if a in attributes: del attributes[a]
+
+        s = state['state'].upper()
+        if s in LIGHT_STATES:
+          self.members[i]['state'] = s
+        else:
+          self.members[i]['state'] = STATE_UNKNOWN
+        self.members[i]['attributes'] = attributes
+
 
   # def init(self):
   #   self.set_namespace(self.args["namespace"])
