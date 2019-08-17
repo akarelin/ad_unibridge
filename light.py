@@ -106,21 +106,20 @@ class group(unibridge.AppHybrid):
   @property
   def brightness(self):
     return self._brightness
-  
+
   members = []
   _state = STATE_UNKNOWN
   _brightness = None
 
   def update(self):
     self._update_hass_members()
-    self._recalculate()
+    self._state()
       
   def initialize(self):
     super().initialize()
     self._load_config()
     self.update()
     self.debug("~~~ Current state {}", self.members)
-
   
   def _mqtt(self, event_name, data, kwargs):
     return
@@ -158,7 +157,7 @@ class group(unibridge.AppHybrid):
   """
   State Calculation
   """
-  def _recalculate(self):
+  def _state(self):
     b = []
     s = STATE_UNKNOWN
     for i,member in enumerate(self.members):
@@ -177,7 +176,7 @@ class group(unibridge.AppHybrid):
     else:
       self._brightness = None
 
-  def _update_hass_members(self):
+  def _state_hassio(self):
     for i,member in enumerate(self.members):
       if member['type'] == TYPE_HASS:
         state = self.get_state(member['entity'], attribute="all")
