@@ -1,0 +1,27 @@
+sample_light_cv:
+  module: light
+  class: group
+  dependencies:
+    - mqtt
+  namespace: cv_primary
+  debug: true
+
+  name: "Bedroom Lamps"
+  topic: 'bedroom/ambient'
+
+  effect: None
+  rgb_color: [255,116,22]
+
+  members:
+    - light.hue_courtyard_color_1 @ cv_primary
+    - light.hue_courtyard_color_2 @ cv_primary
+    - light.hue_courtyard_color_3 @ cv_primary
+  
+  # indicators:
+  #   - insteon/kp/wall/state/1 @ cv_mqtt
+  #   - insteon/kp/desk/state/1 @ cv_mqtt
+  # definitive_state:
+  #   - light.hue_bedroom @ cv_primary
+  # control_indicators:
+  #   - insteon/kp/wall/set/1 @ cv_mqtt
+  #   - insteon/kp/desk/set/1 @ cv_mqtt

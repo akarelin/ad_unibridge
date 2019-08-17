@@ -1,4 +1,4 @@
-sample_light:
+sample_light_sway:
   module: light
   class: group
   dependencies:
