@@ -94,8 +94,17 @@ IGNORE_ATTRIBUTES = [
   'custom_ui_state_card',
   'state_card_mode',
   'stretch_slider',
+  'effect_list',
+  'effect',
+  'supported_features',
+  'hs_color',
+  'xy_color',
   'max_mireds',
   'min_mireds'
+]
+CONVERT_ATTRIBUTES = [
+  'brightness',
+  'rgb_color'
 ]
 
 class group(unibridge.AppHybrid):
@@ -108,12 +117,16 @@ class group(unibridge.AppHybrid):
     return self._brightness
 
   members = []
-  _state = STATE_UNKNOWN
-  _brightness = None
+  """
+  State (Local) and Hassio State
+  """
+  _state = {}
+  _state_hassio = {}
+  _state_desired = {}
+
 
   def update(self):
-    self._update_hass_members()
-    self._state()
+    _state_hassio = self._state_from_hassio()
       
   def initialize(self):
     super().initialize()
@@ -148,35 +161,64 @@ class group(unibridge.AppHybrid):
       member['type'] = t
       member['namespace'] = n
       member['entity'] = e
-      member['state'] = STATE_UNKNOWN
-      member['brightness'] = None
-      member['attributes'] = {}
       entity_list.append(member)
     return entity_list
 
   """
   State Calculation
   """
-  def _state(self):
-    b = []
-    s = STATE_UNKNOWN
-    for i,member in enumerate(self.members):
-      if member['state'] == STATE_ON:
-        s = STATE_ON
-        try:
-          b.append(int(member['attributes']['brightness']))
+  def _state_sum(self, state_array = []):
+    result = {}
+    result['state'] = STATE_UNKNOWN
+
+    state = STATE_UNKNOWN
+    brightness = None
+    rgb_color = None
+
+    v_b = []
+    r_sum = 0
+    g_sum = 0
+    b_sum = 0
+    rgb_count = 0
+
+    for i,s in enumerate(self.state_array):
+      if s['state'] == STATE_ON:
+        state = STATE_ON
+
+        try: v_b.append(int(s['brightness']))
         except:
           pass
-      elif s == STATE_UNKNOWN and member['state'] == STATE_OFF:
-        s = STATE_OFF
-    
-    self._state = s
-    if len(b) > 0:
-      self._brightness = sum(b)
-    else:
-      self._brightness = None
+        
+        try:
+          rgb = s['rgb_color']
+          r = int(rgb[0])
+          g = int(rgb[1])
+          b = int(rgb[2])
+        else:
+          r_sum += r
+          g_sum += g
+          b_sum += b
 
-  def _state_hassio(self):
+      elif s['state'] == STATE_OFF:
+        if s == STATE_UNKNOWN: s == STATE_OFF
+
+    result['state'] = state
+
+    if len(v_b) > 0:
+      brightness = round(sum(v_b)/len(v_b))
+      result['brightness'] = brightness
+    
+    if rgb_count > 0:
+      r = r_sum/rgb_count
+      g = g_sum/rgb_count
+      b = b_sum/rgb_count
+      rgb_color = (r,g,b)
+      result['rgb_color'] = rgb_color
+    
+    return result
+
+  def _state_from_hassio(self):
+    results = []
     for i,member in enumerate(self.members):
       if member['type'] == TYPE_HASS:
         state = self.get_state(member['entity'], attribute="all")
@@ -184,19 +226,19 @@ class group(unibridge.AppHybrid):
           self.warn("Entity {} not found",member['entity'])
           continue
         attributes = state['attributes']
-        
         for s in IGNORE_STATES:
           if s in state: del state[s]
+        for a in CONVERT_ATTRIBUTES:
+          if a in attributes:
+            state[a] = attributes[a]
+            del attributes[a]
         for a in IGNORE_ATTRIBUTES:
           if a in attributes: del attributes[a]
 
-        s = state['state'].upper()
-        if s in LIGHT_STATES:
-          self.members[i]['state'] = s
-        else:
-          self.members[i]['state'] = STATE_UNKNOWN
-        self.members[i]['attributes'] = attributes
-
+        results[i] = state
+        results[i]['attributes'] = attributes
+    
+    return results
 
   # def init(self):
   #   self.set_namespace(self.args["namespace"])
