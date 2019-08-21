@@ -112,10 +112,11 @@ CONVERT_ATTRIBUTES = [
   'rgb_color'
 ]
 
-class groupMember:
+class groupMember(unibridge.AppHybrid):
   type = None
-  namespace
-  entity_id
+  state = None
+  attributes = None
+  entity_id = None
 
   def __init__(self, cfg):
     e = cfg.split(' @ ')[0].lower()
@@ -129,6 +130,30 @@ class groupMember:
     self.type = t
     self.namespace = n
     self.entity_id = e
+  
+  def __repr__(self):
+    return "{} @ {}".format(self.entity_id,self.namespace)
+  
+  def __str__(self):
+    return "{} in {} => {}".format(self.entity_id,self.state,self.attributes)
+  
+  def stateFromHASS(self):
+    state = self.get_state(self.entity_id, attribute="all")
+    if not state:
+      self.warn("Entity {} not found",member['entity'])
+      self.type = None
+      return
+    attributes = state['attributes']
+    for s in IGNORE_STATES:
+      if s in state: del state[s]
+    for a in CONVERT_ATTRIBUTES:
+      if a in attributes:
+        state[a] = attributes[a]
+        del attributes[a]
+      for a in IGNORE_ATTRIBUTES:
+        if a in attributes: del attributes[a]
+    self.state = state
+    self.attributes = attributes
 
 class group(unibridge.AppHybrid):
   @property
@@ -139,7 +164,8 @@ class group(unibridge.AppHybrid):
   def brightness(self):
     return self._brightness
 
-  members = List[groupMember]
+#  members = List[groupMember]
+  members = []
   """
   State (Local) and Hassio State
   """
@@ -148,12 +174,14 @@ class group(unibridge.AppHybrid):
   # _state_desired = {}
 
   def update(self):
-    _state_hassio = self._state_from_hassio()
-      
+    for m in self.members:
+      if m.type == TYPE_HASS:
+        m.stateFromHASS()
+
   def initialize(self):
     super().initialize()
     self._load_config()
-#    self.update()
+    self.update()
     self.debug("~~~ Current state {}", self.members)
   
   def _mqtt(self, event_name, data, kwargs):
@@ -165,6 +193,8 @@ class group(unibridge.AppHybrid):
   """
   def _load_config(self):
     for a in self.args['members']:
+      m = groupMember(a)
+      self.debug("{}", m)
       self.members.append(groupMember(a))
     
   #   self.members = self._load_entity_list(self.args['members'])
@@ -208,6 +238,8 @@ class group(unibridge.AppHybrid):
           r = int(rgb[0])
           g = int(rgb[1])
           b = int(rgb[2])
+        except:
+          pass
         else:
           r_sum += r
           g_sum += g
@@ -231,28 +263,28 @@ class group(unibridge.AppHybrid):
     
     return result
 
-  def _state_from_hassio(self):
-    results = []
-    for i,member in enumerate(self.members):
-      if member['type'] == TYPE_HASS:
-        state = self.get_state(member['entity'], attribute="all")
-        if not state:
-          self.warn("Entity {} not found",member['entity'])
-          continue
-        attributes = state['attributes']
-        for s in IGNORE_STATES:
-          if s in state: del state[s]
-        for a in CONVERT_ATTRIBUTES:
-          if a in attributes:
-            state[a] = attributes[a]
-            del attributes[a]
-        for a in IGNORE_ATTRIBUTES:
-          if a in attributes: del attributes[a]
+  # def _state_from_hassio(self):
+  #   results = []
+  #   for i,member in enumerate(self.members):
+  #     if member['type'] == TYPE_HASS:
+  #       state = self.get_state(member['entity'], attribute="all")
+  #       if not state:
+  #         self.warn("Entity {} not found",member['entity'])
+  #         continue
+  #       attributes = state['attributes']
+  #       for s in IGNORE_STATES:
+  #         if s in state: del state[s]
+  #       for a in CONVERT_ATTRIBUTES:
+  #         if a in attributes:
+  #           state[a] = attributes[a]
+  #           del attributes[a]
+  #       for a in IGNORE_ATTRIBUTES:
+  #         if a in attributes: del attributes[a]
 
-        results[i] = state
-        results[i]['attributes'] = attributes
+  #       results[i] = state
+  #       results[i]['attributes'] = attributes
     
-    return results
+  #   return results
 
   # def init(self):
   #   self.set_namespace(self.args["namespace"])
