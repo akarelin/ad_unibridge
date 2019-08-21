@@ -77,6 +77,11 @@ EFFECT_COLORLOOP = "colorloop"
 EFFECT_RANDOM = "random"
 EFFECT_WHITE = "white"
 
+"""
+|||||||||||||||||||||||||||||
+Adhocs
+|||||||||||||||||||||||||||||
+"""
 # Light Types
 TYPE_HASS = "HASS"
 TYPE_MQTT = "MQTT"
@@ -107,6 +112,24 @@ CONVERT_ATTRIBUTES = [
   'rgb_color'
 ]
 
+class groupMember:
+  type = None
+  namespace
+  entity_id
+
+  def __init__(self, cfg):
+    e = cfg.split(' @ ')[0].lower()
+    n = cfg.split(' @ ')[1].lower()
+    if TYPE_MQTT.lower() in n: t = TYPE_MQTT
+    elif TYPE_HASS.lower() in n: t = TYPE_HASS
+    else:
+      self.error("Invalid member {}", cfg)
+      return
+    
+    self.type = t
+    self.namespace = n
+    self.entity_id = e
+
 class group(unibridge.AppHybrid):
   @property
   def is_on(self):
@@ -116,14 +139,13 @@ class group(unibridge.AppHybrid):
   def brightness(self):
     return self._brightness
 
-  members = []
+  members = List[groupMember]
   """
   State (Local) and Hassio State
   """
-  _state = {}
-  _state_hassio = {}
-  _state_desired = {}
-
+  # _state = {}
+  # _state_hassio = {}
+  # _state_desired = {}
 
   def update(self):
     _state_hassio = self._state_from_hassio()
@@ -131,7 +153,7 @@ class group(unibridge.AppHybrid):
   def initialize(self):
     super().initialize()
     self._load_config()
-    self.update()
+#    self.update()
     self.debug("~~~ Current state {}", self.members)
   
   def _mqtt(self, event_name, data, kwargs):
@@ -142,27 +164,19 @@ class group(unibridge.AppHybrid):
   Loading
   """
   def _load_config(self):
-    self.members = self._load_entity_list(self.args['members'])
-    self.definitive_state = self._load_entity_list(self.args['definitive_state'])
-    self.indicators = self._load_entity_list(self.args['indicators'])
+    for a in self.args['members']:
+      self.members.append(groupMember(a))
+    
+  #   self.members = self._load_entity_list(self.args['members'])
+  #   self.definitive_state = self._load_entity_list(self.args['definitive_state'])
+  #   self.indicators = self._load_entity_list(self.args['indicators'])
 
-  def _load_entity_list(self, arg):
-    entity_list = []
-    for m in arg:
-      e = m.split(' @ ')[0].lower()
-      n = m.split(' @ ')[1].lower()
-      self.debug("Parsing {} => {} {}",m,e,n)
-      if TYPE_MQTT.lower() in n: t = TYPE_MQTT
-      elif TYPE_HASS.lower() in n: t = TYPE_HASS
-      else:
-        self.error("Invalid member {}", m)
-        return
-      member = {}
-      member['type'] = t
-      member['namespace'] = n
-      member['entity'] = e
-      entity_list.append(member)
-    return entity_list
+  # def _load_entity_list(self, arg):
+  #   for a in arg:
+  #     m = groupMember(a)
+
+  #     entity_list.append(member)
+  #   return entity_list
 
   """
   State Calculation
