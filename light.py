@@ -92,7 +92,6 @@ STATE_UNKNOWN = None
 LIGHT_STATES = [STATE_ON, STATE_OFF, STATE_UNKNOWN]
 # Ignoder Attributes
 IGNORE_STATES = [
-  'attributes',
   'context'
 ]
 IGNORE_ATTRIBUTES = [
@@ -112,13 +111,15 @@ CONVERT_ATTRIBUTES = [
   'rgb_color'
 ]
 
-class groupMember(unibridge.AppHybrid):
+class groupMember:
   type = None
   state = None
-  attributes = None
   entity_id = None
 
-  def __init__(self, cfg):
+  hass = None
+  hass_state = None
+
+  def __init__(self, cfg, hass):
     e = cfg.split(' @ ')[0].lower()
     n = cfg.split(' @ ')[1].lower()
     if TYPE_MQTT.lower() in n: t = TYPE_MQTT
@@ -130,30 +131,34 @@ class groupMember(unibridge.AppHybrid):
     self.type = t
     self.namespace = n
     self.entity_id = e
+    self.hass = hass
   
   def __repr__(self):
     return "{} @ {}".format(self.entity_id,self.namespace)
   
   def __str__(self):
-    return "{} in {} => {}".format(self.entity_id,self.state,self.attributes)
+    return "{} in {} => {}".format(self.entity_id,self.state)
   
   def stateFromHASS(self):
-    state = self.get_state(self.entity_id, attribute="all")
+    state = self.hass.get_state(self.entity_id, attribute="all")
     if not state:
-      self.warn("Entity {} not found",member['entity'])
+      self.hass.warn("Entity {} not found", self.entity_id)
       self.type = None
       return
-    attributes = state['attributes']
+#    self.hass.debug("Full state {}", state)
+#    self.hass.debug("Attributes {}", state['attributes'])
+
     for s in IGNORE_STATES:
       if s in state: del state[s]
     for a in CONVERT_ATTRIBUTES:
-      if a in attributes:
-        state[a] = attributes[a]
-        del attributes[a]
-      for a in IGNORE_ATTRIBUTES:
-        if a in attributes: del attributes[a]
-    self.state = state
-    self.attributes = attributes
+#      self.hass.debug("Converting attributes of {}", state['attributes'])
+      if a in state['attributes']:
+        state[a] = state['attributes'][a]
+        del state['attributes'][a]
+    for a in IGNORE_ATTRIBUTES:
+      if a in state['attributes']: del state['attributes'][a]
+    self.hass_state = state
+    self.state = state['state']
 
 class group(unibridge.AppHybrid):
   @property
@@ -193,9 +198,7 @@ class group(unibridge.AppHybrid):
   """
   def _load_config(self):
     for a in self.args['members']:
-      m = groupMember(a)
-      self.debug("{}", m)
-      self.members.append(groupMember(a))
+      self.members.append(groupMember(a,self))
     
   #   self.members = self._load_entity_list(self.args['members'])
   #   self.definitive_state = self._load_entity_list(self.args['definitive_state'])
