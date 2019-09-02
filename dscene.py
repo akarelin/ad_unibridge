@@ -57,27 +57,25 @@ class dscene(unibridge.AppHass):
     self.scene = {}
     
     self.load_members()
-#    self.debug("Scenes {} {}",self.scene['evening'],self.scene['morning'])
+    for s in self.scene_list:
+      self.debug("Scene {} parameters {}",s, self.scene[s])
     self.listen_event(self._event, self.args['event'], namespace=self.args['event_namespace'])
+#    self.DoIt('sleep')
 
   def DoIt(self, name):
-    self.debug("{}",self.scene[name])
+    self.debug("Executing {} with {}", name, self.scene[name])
     for e,v in self.scene[name].items():
-      # try:
-      #   params = v['params']
-      # except:
-      #   params = ''
-      params = v
-#      n = v['namespace']
-#      del params['namespace']
       s = v['service']
-      del params['service']
-      params['entity_id'] = e
+      params = {}
+
+      if 'params' in v:
+        params = v['params']
+      self.debug("Calling service {} with {}",s,params)
       
-      self.debug("Calling service {} with params {}",s,params)
-      
-      if 'brightness_pct' in v:
-        self.call_service(s, namespace = v['namespace'], entity_id = e, brightness_pct = v['brightness_pct'])
+      if 'brightness_pct' in params:
+        self.call_service(s, namespace = v['namespace'], entity_id = e, brightness_pct = params['brightness_pct'])
+      elif 'preset_mode' in params:
+        self.call_service(s, namespace = v['namespace'], entity_id = e, preset_mode = params['preset_mode'])
       else:
         self.call_service(s, namespace = v['namespace'], entity_id = e)
 
@@ -88,8 +86,7 @@ class dscene(unibridge.AppHass):
         params = {}
         service = ''
         command = ''
-        if '.' not in m:
-          m = 'light.'+m
+## Extract namespace
         if '@' in m:
           e = m.split('@')[0].strip()
           n = m.split('@')[1].strip()
@@ -97,19 +94,37 @@ class dscene(unibridge.AppHass):
           e = m
           n = self.args['default_namespace']
         try: command = sv[s]
-        except: break
-
-        if command in ['on','true']:
-          service = 'light/turn_on'
-        elif command in ['off','false']:
-          service = 'light/turn_off'
+        except: continue
+#          self.error("Scene {} unknown command {}",s,sv[s])
+          
+## Determine type
+        if '.' in m:
+          t = e.split('.')[0]
         else:
-          try:
-            params['brightness_pct'] = int(command)
+          t = 'light'
+          e = 'light.'+e
+## Determine call
+        if t in ['light']:
+          if command in ['on','true']:
             service = 'light/turn_on'
-          except:
-            self.error("Scene {} member {} unknown command {}",s,m,command)
-            break
+          elif command in ['off','false']:
+            service = 'light/turn_off'
+          else:
+            try:
+              params['brightness_pct'] = int(command)
+              service = 'light/turn_on'
+            except:
+              self.error("Scene {} member {} unknown {} command {}",s,m,t,command)
+              continue
+        elif t in ['climate']:
+          if command in ['home','away']:
+            service = 'climate/set_preset_mode'
+            params['preset_mode'] = command
+          else:
+            self.error("Scene {} member {} unknown {} command {}",s,m,t,command)
+        else:
+          self.error("Scene {} member {} unknown type {}",s,m,t)
+
         self.scene[s][e] = {}
         self.scene[s][e]['service'] = service
         self.scene[s][e]['namespace'] = n
@@ -122,9 +137,6 @@ class dscene(unibridge.AppHass):
       self.error("Unknown scene {}", scene)
       return
 
-
-
-  
   # def cbEvent(self, event_name, data, kwargs):
   #   try:
   #     command = data['control']
@@ -145,6 +157,4 @@ class dscene(unibridge.AppHass):
   #     self.turn_on(self.entity_id, brightness = 255)
   #   else:
   #     self.debug("Not our command {}", command)
-# If its DON, DOFF on any of our buttons - change the status of entity
-
 
