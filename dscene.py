@@ -59,14 +59,12 @@ class dscene(unibridge.AppHass):
     for s in self.scene_list:
       self.debug("Scene {} parameters {}",s, self.scene[s])
     self.listen_event(self._event, self.args['event'], namespace=self.args['event_namespace'])
-    self.DoIt('sleep')
 
   def DoIt(self, name):
     self.debug("Executing {} with {}", name, self.scene[name])
     for e,v in self.scene[name].items():
       s = v['service']
       params = {}
-#      self.debug("V {} type {}",v,type(v))
 
       if 'params' in v:
         params = v['params']
@@ -95,8 +93,6 @@ class dscene(unibridge.AppHass):
           n = self.args['default_namespace']
         try: command = sv[s]
         except: continue
-#          self.error("Scene {} unknown command {}",s,sv[s])
-          
 ## Determine type
         if '.' in m:
           t = e.split('.')[0]
@@ -131,30 +127,9 @@ class dscene(unibridge.AppHass):
         if params:
           self.scene[s][e]['params'] = params
 
-  def _event(self, evemt_name, data, kwargs):
+  def _event(self, event_name, data, kwargs):
     scene = data['scene']
     if scene not in self.scenes:
       self.error("Unknown scene {}", scene)
       return
-
-  # def cbEvent(self, event_name, data, kwargs):
-  #   try:
-  #     command = data['control']
-  #   except:
-  #     command = 'UNKNOWN'
-  #   self.debug("Event {} fired by {}", command, data['entity_id'])
-  #   if data['entity_id'] not in self.buttons:
-  #     self.debug("Not our entity {}", data['entity_id'])
-  #     return
-  #   if command in ['DON']:
-  #     self.debug("Turning on {}", self.entity_id)
-  #     self.turn_on(self.entity_id)
-  #   elif command in ['DOF', 'DFOF']:
-  #     self.debug("Turning off {}", self.entity_id)
-  #     self.turn_off(self.entity_id)
-  #   elif command in ['DFON']:
-  #     self.debug("Turning on full {}", self.entity_id)
-  #     self.turn_on(self.entity_id, brightness = 255)
-  #   else:
-  #     self.debug("Not our command {}", command)
-
+    self.DoIt(scene)
