@@ -50,7 +50,7 @@ class colorgroup(hass.Hass):
     for i,entity in entities:
       if self.state == 'ON':
         if self.rgb_color:
-        self.turn_on(entity, rgb_color=self.rgb_color, brightness=self.brightness)
+          self.turn_on(entity, rgb_color=self.rgb_color, brightness=self.brightness)
         elif self.color_temp:
           self.turn_on(entity, color_temp=self.color_temp, brightness=self.brightness)
         else:
