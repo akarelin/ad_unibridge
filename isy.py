@@ -1,28 +1,7 @@
-import appdaemon.plugins.hass.hassapi as hass
+import unibridge
 import datetime
 
-class button(hass.Hass):
-  def _log(self, level, message, *args):
-    try:
-      if args: self.log(message.format(*args), level=level)
-      else: self.log(message, level=level)
-    except:
-      self.log("Debug Logger Failed {}".format(message))
-  def warn(self, message, *args):
-    level = "WARN"
-    self._log(level, message, *args)
-  def debug(self, message, *args):
-    level = "INFO"
-    enabled = False
-    try: 
-      if self.args["debug"] == True:
-        enabled = True
-    except: 
-      pass
-    if not enabled: 
-      return
-    self._log(level, message, *args)
-
+class button(unibridge.AppHass):
   def initialize(self):
     self.debug("Initializing buttons {} to trigger device {}", self.args["buttons"], self.args["entity_id"])
     if isinstance(self.args["buttons"], str):
@@ -60,28 +39,7 @@ class button(hass.Hass):
       self.debug("Not our command {}", command)
 # If its DON, DOFF on any of our buttons - change the status of entity
 
-class indicator(hass.Hass):
-  def _log(self, level, message, *args):
-    try:
-      if args: self.log(message.format(*args), level=level)
-      else: self.log(message, level=level)
-    except:
-      self.log("Debug Logger Failed {}".format(message))
-  def warn(self, message, *args):
-    level = "WARN"
-    self._log(level, message, *args)
-  def debug(self, message, *args):
-    level = "INFO"
-    enabled = False
-    try: 
-      if self.args["debug"] == True:
-        enabled = True
-    except: 
-      pass
-    if not enabled: 
-      return
-    self._log(level, message, *args)
-
+class indicator(unibridge.AppHass):
   def initialize(self):
     self.debug("Initializing trigger {} and indicator {}", self.args["trigger"], self.args["indicator"])
     if isinstance(self.args["on_value"], str):
