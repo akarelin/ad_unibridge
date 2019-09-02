@@ -1,0 +1,178 @@
+import json
+import unibridge
+from datetime import datetime, time
+
+"""
+test_colorloop:
+  module: mqtt_light2
+  class: mqtt_light2
+  
+  name: "Colorloop"
+  topic: 'colorloop'
+  topic_namespace: sway_hassio
+
+  entities:
+    - light.hue_corner
+  entity_namespace: sway_hassio
+
+  effect: colorloop
+  period: 60
+  precision: 5
+"""
+
+# class mqtt(unibridge.AppMqtt):
+#   def initialize(self):
+#     try: self.topic = self.args["topic"]
+#     except:
+#       self.error("Invalid topic {}", self.args["topic"])
+#     self.set_namespace(self.args['namespace'])
+
+#     self.mqtt_subscribe(self.topic)
+#     self.mqtt_listener = self.listen_event(self._mqtt_trigger, "MQTT_MESSAGE")
+    
+#   def terminate(self):
+#     try:
+#       self.mqtt_unsubscribe(self.topic)
+#       self.cancel_listen_event(self.mqtt_listener)
+#     except:
+#       pass
+
+#   def _mqtt_trigger(self, event_name, data, kwargs):
+#     self.debug("Topic {} Payload {}", data['topic'], data['payload'])
+#     self.fire_event("MQTT")
+
+class test_colorloop(unibridge.AppHass):
+  def initialize(self):
+    self.state = 'OFF'
+    try: self.period = int(self.args["period"])
+    except: self.period = 60
+    try: self.precision = int(self.args["precision"])
+    except: self.precision = 5
+    try: self.brightness = int(self.args["brightness"])
+    except: self.brightness = 128
+    
+    self.topic = self.args["topic"]
+
+    self.set_namespace(self.args["namespace"])
+    self.timer = self.run_every(self._timer, self.datetime(), self.precision)
+    # self.mqtt_listener = self.listen_event
+
+    #self.listener = self.listen_event(self._mqtt, "MQTT_MESSAGE")
+    self.mqtt = self.get_app("test_mqtt")
+    if not self.mqtt:
+      self.error("MQTT App not found")
+      return
+    else:
+      self.mqtt.subscribe(self.topic, self._mqtt)
+#    except:
+#      trace_log.log("Parent appears to be dead {}", self.parent)
+    self.debug("SET Topic {} | STATUS Topic {} | PARENT Topic {}", self.topic_set, self.topic_state, self.parent.topic)
+    self.mqtt_listener = self.listen_event(self._mqtt_trigger, "MQTT_MESSAGE")
+
+
+  def _mqtt(self, event_name, data, kwargs):
+    self.debug("````````` {} {} {}", event_name, data, kwargs)
+
+  def terminate(self):
+    self.cancel_timer(self.timer)
+
+  def _timer(self, kwargs):
+    self._update()
+
+  def light_on(self, brightness = 128):
+    self.state = 'ON'
+    self.brightness = brightness
+    self.debug("Switching on")
+    self._update()
+  def light_off(self):
+    self.state = 'OFF'
+    self.debug("Switching off")
+    self._update()
+
+  def _update(self):
+    if self.state == 'ON':
+      brightness = self.brightness
+      self.debug("Brightness {}", brightness)
+
+      now=self.datetime()
+      midnight=self.datetime().replace(hour=0,minute=0,second=0,microsecond=0)
+      seconds=(now-midnight).seconds
+      modulo=(seconds%(self.period*60))/10
+      self.debug("Seconds {}, period {}, modulo {}", seconds, self.period, modulo)
+
+    entities = enumerate(self.args["entities"])
+    l = len(self.args["entities"])
+    for i,entity in entities:
+      if self.state == 'ON':
+        hscolor=int((modulo+i*360/l)%360)
+        self.debug("Setting color for {} to {}", entity, hscolor)
+        self.turn_on(entity, hs_color=[hscolor,100], brightness=self.brightness)
+      elif self.state == 'OFF':
+        self.debug("Turning off")
+        self.turn_off(entity)
+      else:
+        self.debug("Unkown state {}".format(self.state))
+    
+    status = {}
+    status['state']=self.state
+    if self.brightness:
+      status['brightness']=self.brightness
+    status_json = json.dumps(status)
+    if self.topic:
+      self.debug("Status Publish to Topic {} Payload {}", self.topic, status_json)
+      self.call_service("mqtt/publish", topic=self.topic, payload=status_json)
+    else:
+      self.debug("No status topic")      
+
+
+# test_mqtt:
+#   module: test
+#   class: testMqtt
+#   debug: false
+# test:
+#   module: test
+#   class: testHass
+#   debug: false
+
+#class testHass(unibridge.AppHass):
+    def initialize(self):
+        self.set_namespace(self.args["namespace"])
+#    self.listen_state(self._trigger,
+#        self.args["trigger"], duration=60, immediate=True,
+#        namespace=self.args["namespace"])
+#        runtime = datetime.time(0, 0, 0)
+#        self.timer = self.run_every(self._timer, self.datetime(), 10)
+#        self.timer = self.run_minutely(self._timer, runtime)
+#        self.run_every(self._timer, runtime, 10*1)
+
+#     def _timer(self, kwargs):
+#         self.debug("Timer Debug")
+#         self.warn("Timer Warning {}", self.args["namespace"])
+      
+# class testMqtt(unibridge.AppMqtt):
+#     def initialize(self):
+#         self.debug("Initializing, Debug")
+#         self.warn("Initializing, Warn")
+#         self.rebug("Initializing, Rebug")
+#         self.mqtt_subscribe('insteon/#')
+#         self.mqtt_listener = self.listen_event(self._mqtt_trigger, "MQTT_MESSAGE")
+    
+#     def terminate(self):
+#         self.debug("Terminating, Debug")
+#         self.warn("Terminating, Warn")
+#         self.rebug("Terminating, Rebug")
+
+#     def _mqtt_trigger(self, event_name, data, kwargs):
+#         self.warn("Topic {} Payload {}", data['topic'], data['payload'])
+#         self.debug("Topic {} Payload {}", data['topic'], data['payload'])
+#     # try:
+#     #   payload = json.loads(data['payload'])
+#     #   site = data['topic'].split('/')[1]
+#     #   ap = data['topic'].split('/')[4]
+#     #   name = data['topic'].split('/')[6]
+#     #   val = payload['val']
+#     #   mac = payload['mac']
+#     #   ts = payload['ts']
+#     # except:
+#     #   self.debug("Not for us")
+#     #   return

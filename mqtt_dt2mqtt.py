@@ -1,28 +1,8 @@
-import appdaemon.plugins.mqtt.mqttapi as mqtt
+import unibridge
 import json
+#from datetime import datetime, time
 
-class Unifi2DT(mqtt.Mqtt):
-  def _log(self, level, message, *args):
-    try:
-      if args: self.log(message.format(*args), level=level)
-      else: self.log(message, level=level)
-    except:
-      self.log("Debug Logger Failed {}".format(message))
-  def warn(self, message, *args):
-    level = "WARN"
-    self._log(level, const_warn_level, message, *args)
-  def debug(self, message, *args):
-    level = "INFO"
-    enabled = False
-    try: 
-      if self.args["debug"] == True:
-        enabled = True
-    except: 
-      pass
-    if not enabled: 
-      return
-    self._log(level, message, *args)
-
+class Unifi2DT(unibridge.AppMqtt):
   def initialize(self):
     try: self.topic = self.args["topic"]
     except: self.topic = "unifi/+/status/wifi/+/client/+"
@@ -89,4 +69,4 @@ class Unifi2DT(mqtt.Mqtt):
     topic = 'device/'+device
     payload = json.dumps(location)
     self.debug("~~~~~~~ {} => {}", topic, payload)
-    self.mqtt_publish(topic, payload, qos = 0, retain = False, namespace = self.args['namespace'])
+    self.mqtt_publish(topic, payload, qos = 0, retain = False)
