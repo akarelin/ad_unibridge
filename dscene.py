@@ -51,7 +51,6 @@ from datetime import datetime, time
 
 class dscene(unibridge.AppHass):
   def initialize(self):
-#    super().initialize()
     self.scene_list = []
     self.scene_list = self.args['scenes']
     self.scene = {}
