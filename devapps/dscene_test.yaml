@@ -104,3 +104,12 @@ twentyfourseven:
       night: 10
       sleep: 'off'
       morning: 'off'
+###### Alex Office #######
+    hue_ao_corner @ cv_primary:
+      evening: 33
+      night: 10
+      sleep: 'off'
+      morning: 'off'
+    climate.alex_office @ cv_secondary:
+      sleep: away
+      morning: home
