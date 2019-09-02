@@ -59,12 +59,14 @@ class dscene(unibridge.AppHass):
     for s in self.scene_list:
       self.debug("Scene {} parameters {}",s, self.scene[s])
     self.listen_event(self._event, self.args['event'], namespace=self.args['event_namespace'])
+    self.DoIt('sleep')
 
   def DoIt(self, name):
     self.debug("Executing {} with {}", name, self.scene[name])
     for e,v in self.scene[name].items():
       s = v['service']
       params = {}
+#      self.debug("V {} type {}",v,type(v))
 
       if 'params' in v:
         params = v['params']
