@@ -20,6 +20,8 @@ class colorgroup(hass.Hass):
     except: self.brightness = 128
     try: self.rgb_color = self.args["rgb_color"]
     except: self.rgb_color = None
+    try: self.color_temp = self.args["color_temp"]
+    except: self.color_temp = None
 
     self.set_namespace(self.args["namespace"])
 #    self.timer = self.run_every(self.cbTimer, self.datetime(), self.precision)
@@ -47,7 +49,12 @@ class colorgroup(hass.Hass):
     l = len(self.args["entities"])
     for i,entity in entities:
       if self.state == 'ON':
+        if self.rgb_color:
         self.turn_on(entity, rgb_color=self.rgb_color, brightness=self.brightness)
+        elif self.color_temp:
+          self.turn_on(entity, color_temp=self.color_temp, brightness=self.brightness)
+        else:
+          self.turn_on(entity, brightness=self.brightness)
       elif self.state == 'OFF':
         self.debug("Turning off")
         self.turn_off(entity)

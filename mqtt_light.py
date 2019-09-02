@@ -97,9 +97,9 @@ class MQTTLight(mqtt.Mqtt):
 #
 #
   def _mqtt_trigger(self, event_name, data, kwargs):
-    self.debug("Topic {} Payload {}", data['topic'], data['payload'])
+#    self.debug("Topic {} Payload {}", data['topic'], data['payload'])
     if data['topic'] != self.topic_set:
-      self.debug("Not our Topic {}", data['topic'])
+#     self.debug("Not our Topic {}", data['topic'])
       return
 
     if data['payload'] in ['ON','OFF']:
