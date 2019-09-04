@@ -20,8 +20,8 @@ class Unifi2DT(unibridge.AppMqtt):
       self.warn("Devices are invalid {}", self.args["devices"])
       return
 
-    self.debug("~~~~ Devices {}", self.devices)
-    self.debug("~~~~ Sites {}", self.sites)
+ #   self.debug("~~~~ Devices {}", self.devices)
+ #   self.debug("~~~~ Sites {}", self.sites)
     self.mqtt_subscribe(self.topic)
     self.mqtt_listener = self.listen_event(self._mqtt_trigger, "MQTT_MESSAGE")
     
@@ -33,7 +33,7 @@ class Unifi2DT(unibridge.AppMqtt):
       pass
 
   def _mqtt_trigger(self, event_name, data, kwargs):
-    self.debug("Topic {} Payload {}", data['topic'], data['payload'])
+#    self.debug("Topic {} Payload {}", data['topic'], data['payload'])
 
     try:
       payload = json.loads(data['payload'])
@@ -44,7 +44,7 @@ class Unifi2DT(unibridge.AppMqtt):
       mac = payload['mac']
       ts = payload['ts']
     except:
-      self.debug("Not for us")
+#      self.debug("Not for us")
       return
 
     if not val:
@@ -53,20 +53,20 @@ class Unifi2DT(unibridge.AppMqtt):
    
     try:
       device = self.devices[mac]
-      self.debug("~~~~~ {} Our Device", device)
+#      self.debug("~~~~~ {} Our Device", device)
     except:
-      self.debug("~~~~~ {} Not our device", mac)
+#      self.debug("~~~~~ {} Not our device", mac)
       return
 
     location = {}
     try:
       location = self.sites[site]
-      self.debug("~~~~~ {} Our location", location)
+#      self.debug("~~~~~ {} Our location", location)
     except:
-      self.debug("~~~~~ {} Not our site", site)
+#      self.debug("~~~~~ {} Not our site", site)
       return
 
     topic = 'device/'+device
-    payload = location
+    payload = json.dumps(location)
     self.debug("~~~~~~~ {} => {}", topic, payload)
     self.mqtt_publish(topic, payload, qos = 0, retain = False)

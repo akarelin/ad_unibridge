@@ -1,5 +1,6 @@
 import unibridge
 import json
+import re
 from datetime import datetime, time
 
 """
@@ -74,6 +75,8 @@ class dscene(unibridge.AppHass):
         self.call_service(s, namespace = v['namespace'], entity_id = e, brightness_pct = params['brightness_pct'])
       elif 'preset_mode' in params:
         self.call_service(s, namespace = v['namespace'], entity_id = e, preset_mode = params['preset_mode'])
+      elif 'rgb_color' in params:
+        self.call_service(s, namespace = v['namespace'], entity_id = e, brightness_pct = params['brightness_pct'], rgb_color = params['rgb_color'])
       else:
         self.call_service(s, namespace = v['namespace'], entity_id = e)
 
@@ -82,8 +85,8 @@ class dscene(unibridge.AppHass):
       self.scene[s] = {}
       for m,sv in self.args["members"].items():
         params = {}
-        service = ''
-        command = ''
+        service = ""
+        command = ""
 ## Extract namespace
         if '@' in m:
           e = m.split('@')[0].strip()
@@ -91,6 +94,7 @@ class dscene(unibridge.AppHass):
         else:
           e = m
           n = self.args['default_namespace']
+## Extract command
         try: command = sv[s]
         except: continue
 ## Determine type
@@ -101,9 +105,17 @@ class dscene(unibridge.AppHass):
           e = 'light.'+e
 ## Determine call
         if t in ['light']:
-          if command in ['on','true']:
+          if '@' in str(command):
+            try:
+              service = 'light/turn_on'
+              params['brightness_pct'] = int(command.split('@')[1])
+              params['rgb_color'] = command.split('@')[0].strip()
+            except:
+              self.error("Scene={} member={} Unknown command {}",s,m,command)
+              continue
+          elif command in ['on','true']:
             service = 'light/turn_on'
-          elif command in ['off','false']:
+          elif command in ['off','false','0']:
             service = 'light/turn_off'
           else:
             try:
@@ -138,6 +150,7 @@ class dscene(unibridge.AppHass):
           self.scene[s][e]['params'] = params
 
   def _event(self, event_name, data, kwargs):
+    self.debug("Event {} with {}",event_name,data)
     scene = data['scene']
     if scene not in self.scene_list:
       self.error("Unknown scene {}", scene)
