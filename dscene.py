@@ -68,7 +68,7 @@ class dscene(unibridge.AppHass):
 
       if 'params' in v:
         params = v['params']
-      self.debug("Calling service {} with {}",s,params)
+      self.debug("Calling {} on {} for {} with {}",s,v['namespace'],e,params)
       
       if 'brightness_pct' in params:
         self.call_service(s, namespace = v['namespace'], entity_id = e, brightness_pct = params['brightness_pct'])
@@ -107,8 +107,13 @@ class dscene(unibridge.AppHass):
             service = 'light/turn_off'
           else:
             try:
-              params['brightness_pct'] = int(command)
-              service = 'light/turn_on'
+              if '@' in str(command):
+                params['brightness_pct'] = int(command.split('@')[1].strip())
+                params['rgb_color'] = command.split('@')[0].strip()
+                service = 'light/turn_on'
+              else:
+                params['brightness_pct'] = int(command)
+                service = 'light/turn_on'
             except:
               self.error("Scene {} member {} unknown {} command {}",s,m,t,command)
               continue
@@ -134,7 +139,7 @@ class dscene(unibridge.AppHass):
 
   def _event(self, event_name, data, kwargs):
     scene = data['scene']
-    if scene not in self.scenes:
+    if scene not in self.scene_list:
       self.error("Unknown scene {}", scene)
       return
     self.DoIt(scene)
