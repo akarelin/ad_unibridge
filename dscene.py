@@ -69,7 +69,7 @@ class dscene(unibridge.AppHass):
 
       if 'params' in v:
         params = v['params']
-      self.debug("{} for {} with {}",s,e,params)
+      self.debug("Calling {} on {} for {} with {}",s,v['namespace'],e,params)
       
       if 'brightness_pct' in params:
         self.call_service(s, namespace = v['namespace'], entity_id = e, brightness_pct = params['brightness_pct'])
@@ -119,13 +119,23 @@ class dscene(unibridge.AppHass):
             service = 'light/turn_off'
           else:
             try:
-              params['brightness_pct'] = int(command)
-              service = 'light/turn_on'
+              if '@' in str(command):
+                params['brightness_pct'] = int(command.split('@')[1].strip())
+                params['rgb_color'] = command.split('@')[0].strip()
+                service = 'light/turn_on'
+              else:
+                params['brightness_pct'] = int(command)
+                service = 'light/turn_on'
             except:
               self.error("Scene {} member {} unknown {} command {}",s,m,t,command)
               continue
         elif t in ['climate']:
-          if command in ['home','away']:
+          if command in ['off']:
+            service = 'climate/turn_off'
+          elif command in ['auto','cool','heat']:
+            service = 'climate/set_hvac_mode'
+            params['hvac_mode'] = command
+          elif command in ['home','away']:
             service = 'climate/set_preset_mode'
             params['preset_mode'] = command
           else:
