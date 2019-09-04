@@ -5,10 +5,10 @@ from datetime import datetime, time
 
 """
 247:
-  module: dscene
-  class: dscene
+  module: scene
+  class: scene
 
-  event: DSCENE
+  event: SCENE
   event_namespace: cv
 
   scenes:
@@ -17,40 +17,27 @@ from datetime import datetime, time
   - sleep
   - morning
 
+  default_namespace: cv
   members:
-  - front_lamps @ cv:
+    front_lamps @ cv:
       evening: 33
-  - front_landscape @ cv:
-      evening: 66
-  - courtyard @ cv:
-      evening: on
-  - courtyard_colorloop:
+    courtyard_colorloop:
       evening: 33
-  - upstairs_corridor_color:
-      evening: 50
-  - stairs_color:
-      evening: 50
-  - empty_office_ambient:
-      evening: 33
-  - family_room_ambient:
-      evening: 25
-  - stairs_ambient:
-      evening: 66
-  - entry_ambient:
-      evening: 75
-  - downstairs_corridor_undercabinet:
-      evening: 33
-  - living_room_ambient:
-      evening: 75
-  - dining_ambient:
-      evening: 33
-  - kitchen_overcabient:
-      evening: on
-  - kitchen_undercabinet:
-      evening: on
+      night: 16
+      sleep: 'off'
+      day: 'off'      
+    hue_front_color @ cv_primary:
+      evening: 81,255,101 @ 50
+      night: 81,255,101 @ 33
+      sleep: 81,255,101 @ 25
+      day: 'off'
+    climate.downstairs:
+      home: cool
+      sleep: 'off'
+      away: 'off'      
 """
 
-class dscene(unibridge.AppHass):
+class scene(unibridge.AppHass):
   def initialize(self):
     self.scene_list = []
     self.scene_list = self.args['scenes']
