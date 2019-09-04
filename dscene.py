@@ -113,7 +113,12 @@ class dscene(unibridge.AppHass):
               self.error("Scene {} member {} unknown {} command {}",s,m,t,command)
               continue
         elif t in ['climate']:
-          if command in ['home','away']:
+          if command in ['off']:
+            service = 'climate/turn_off'
+          elif command in ['auto','cool','heat']:
+            service = 'climate/set_hvac_mode'
+            params['hvac_mode'] = command
+          elif command in ['home','away']:
             service = 'climate/set_preset_mode'
             params['preset_mode'] = command
           else:
