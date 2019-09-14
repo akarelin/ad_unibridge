@@ -18,6 +18,37 @@ WARNING
 ERROR
 """
 
+class AppHybrid(AppHass):
+  def initialize(self):
+    self.set_namespace(self.args["namespace"])
+    self.mqtt = self.get_app("mqtt")
+    self.mqtt.listen_event(self._mqtt, "MQTT_MESSAGE")
+  def terminate(self):
+    self.mqtt.cancel_listen_event(self._mqtt)
+
+class mqtt(unibridge.AppMqtt):
+  self.topics = []
+
+  def subscribe(self, topic):
+    if topic not in self.topics:
+      self.topics.append(topic)
+    self.mqtt_subscribe(topic)
+  
+  def unsibscribe(self, topic):
+    if topic in self.topics:
+      self.topics.remove(topic)
+    self.mqtt_unsubscribe(topic)
+
+  def initialize(self):
+#    try: self.topics = self.args["topics"]
+#    except: self.topics = ["#"]
+    self.set_namespace(self.args['namespace'])
+#    for t in self.topics:
+#      self.mqtt_subscribe(t)
+  def terminate(self):
+    for topic in self.topics:
+      self.mqtt_unsubscribe(topic)
+
 class AppHass(hassapi.Hass):
   class Meta:
     """
@@ -49,16 +80,6 @@ class AppHass(hassapi.Hass):
         self._log("INFO", LOG_PREFIX_STATUS, message, *args)
     except:
       self._log("ERROR", LOG_PREFIX_WARNING, "Exception with debug")
-
-class AppHybrid(AppHass):
-  def initialize(self):
-    self.set_namespace(self.args["namespace"])
-    self.mqtt = self.get_app("mqtt")
-    self.mqtt.listen_event(self._mqtt, "MQTT_MESSAGE")
-  def terminate(self):
-    self.mqtt.cancel_listen_event(self._mqtt)
-  def _mqtt(self, event_name, data, kwargs):
-    self.debug("Topic {} Payload {}", data['topic'], data['payload'])
 
 class AppMqtt(mqttapi.Mqtt):
   class Meta:

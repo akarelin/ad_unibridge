@@ -11,6 +11,8 @@ from datetime import datetime, time
 
   event: SCENE
   event_namespace: cv
+  topic: 'scene'
+  topic_namespace: cv_mqtt
 
   scenes:
   - evening
@@ -41,16 +43,31 @@ from datetime import datetime, time
 ON = "turn_on"
 OFF = "turn_off"
 
-class scene(unibridge.AppHass):
+class scene(unibridge.AppHybrid):
+  self.scene_list = []
+  self.scene = {}
+  self.topic = ""
+
   def initialize(self):
-    self.scene_list = []
+    super().initialize()
+
     self.scene_list = self.args['scenes']
-    self.scene = {}
-    
     for scene_name in self.scene_list:
       self.scene[scene_name] = self.load_scene(scene_name)
       self.debug("Loaded scene {} with {}",scene_name,self.scene[scene_name])
+# Events      
     self.listen_event(self._event, self.args['event'], namespace=self.args['event_namespace'])
+# MQTT
+    self.mqtt = self.get_app("mqtt")
+    self.mqtt.listen_event(self._mqtt, "MQTT_MESSAGE")
+    if self.args['topic']:
+      self.mqtt.subscribe(self.args['topic'])
+  
+  def _mqtt(self, event_name, data, kwargs):
+    if topic in data['topic']:
+      self.debug("Our topic {} Payload {}", data['topic'], data['payload'])
+    else:
+      self.debug("Not our topic {} Payload {}", data['topic'], data['payload'])
 
   def DoIt(self, scene_name):
     scene = self.scene[scene_name]
