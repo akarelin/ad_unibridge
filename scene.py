@@ -3,6 +3,7 @@ import json
 import re
 from datetime import datetime, time
 
+
 """
 247:
   module: scene
@@ -37,104 +38,107 @@ from datetime import datetime, time
       away: 'off'      
 """
 
+ON = "turn_on"
+OFF = "turn_off"
+
 class scene(unibridge.AppHass):
   def initialize(self):
     self.scene_list = []
     self.scene_list = self.args['scenes']
     self.scene = {}
     
-    self.load_members()
-    for s in self.scene_list:
-      self.debug("Scene {} parameters {}",s, self.scene[s])
+    for scene_name in self.scene_list:
+      self.scene[scene_name] = self.load_scene(scene_name)
+      self.debug("Loaded scene {} with {}",scene_name,self.scene[scene_name])
     self.listen_event(self._event, self.args['event'], namespace=self.args['event_namespace'])
 
-  def DoIt(self, name):
-    self.debug("Executing {} with {}", name, self.scene[name])
-    for e,v in self.scene[name].items():
-      s = v['service']
+  def DoIt(self, scene_name):
+    scene = self.scene[scene_name]
+    for member in scene:
+      service = member.pop('service_call')
+      domain, method = service.split('/')
+      self.debug("Calling service {} => {}",service,member)
+      self.call_service(service,**member)
+
+  def load_scene(self, scene_name):
+    scene_members = []
+#    self.debug("Loading scene {} from {}",scene_name,self.args["members"])
+    for member,member_actions in self.args["members"].items():
+      action = member_actions.get(scene_name)
+      if not action:
+        self.debug("Member {} is not in scene {}",member,scene_name)
+        continue
+
+      method = ""
+      namespace = ""
+      entity_id = ""
+      domain = ""
       params = {}
-
-      if 'params' in v:
-        params = v['params']
-      self.debug("Calling {} on {} for {} with {}",s,v['namespace'],e,params)
-      
-      if 'brightness_pct' in params:
-        self.call_service(s, namespace = v['namespace'], entity_id = e, brightness_pct = params['brightness_pct'])
-      elif 'preset_mode' in params:
-        self.call_service(s, namespace = v['namespace'], entity_id = e, preset_mode = params['preset_mode'])
-      elif 'rgb_color' in params:
-        self.call_service(s, namespace = v['namespace'], entity_id = e, brightness_pct = params['brightness_pct'], rgb_color = params['rgb_color'])
+## Extract namespace and entity_id
+      if '@' in member:
+        entity_id = member.split('@')[0].strip()
+        namespace = member.split('@')[1].strip()
       else:
-        self.call_service(s, namespace = v['namespace'], entity_id = e)
+        entity_id = member
+        namespace = self.args['default_namespace']
+      if '.' in entity_id:
+        domain = entity_id.split('.')[0]
+      else:
+        domain = 'light'
+        entity_id = 'light.'+entity_id
+##
+## Build service call
+##
+## Light
+      if domain in ['light']:
+        brightness=""
+        if '@' in str(action):
+          method = ON
+          try:
+            brightness = int(action.split('@')[1].strip())
+            rgb = action.split('@')[0].strip().split(',')
+            params['rgb_color'] = rgb
+          except:
+            self.error("[AT] {} => {} =???=> {}",scene_name,member,action)
+            continue
+        elif action in ['on','true']:
+          method = ON
+        elif action in ['off','false','0',0]:
+          method = OFF
+        else:
+          method = ON
+          brightness = action
 
-  def load_members(self):
-    for s in self.scene_list:
-      self.scene[s] = {}
-      for m,sv in self.args["members"].items():
-        params = {}
-        service = ""
-        command = ""
-## Extract namespace
-        if '@' in m:
-          e = m.split('@')[0].strip()
-          n = m.split('@')[1].strip()
-        else:
-          e = m
-          n = self.args['default_namespace']
-## Extract command
-        try: command = sv[s]
-        except: continue
-## Determine type
-        if '.' in m:
-          t = e.split('.')[0]
-        else:
-          t = 'light'
-          e = 'light.'+e
-## Determine call
-        if t in ['light']:
-          if '@' in str(command):
-            try:
-              service = 'light/turn_on'
-              params['brightness_pct'] = int(command.split('@')[1])
-              params['rgb_color'] = command.split('@')[0].strip()
-            except:
-              self.error("Scene={} member={} Unknown command {}",s,m,command)
-              continue
-          elif command in ['on','true']:
-            service = 'light/turn_on'
-          elif command in ['off','false','0']:
-            service = 'light/turn_off'
+        if brightness:
+          if brightness == 1:
+            params['brightness'] = 1
+          elif brightness > 1:
+            params['brightness'] = int(brightness*2.55)
           else:
-            try:
-              if '@' in str(command):
-                params['brightness_pct'] = int(command.split('@')[1].strip())
-                params['rgb_color'] = command.split('@')[0].strip()
-                service = 'light/turn_on'
-              else:
-                params['brightness_pct'] = int(command)
-                service = 'light/turn_on'
-            except:
-              self.error("Scene {} member {} unknown {} command {}",s,m,t,command)
-              continue
-        elif t in ['climate']:
-          if command in ['off']:
-            service = 'climate/turn_off'
-          elif command in ['auto','cool','heat']:
-            service = 'climate/set_hvac_mode'
+            self.error("[Brightness] {} => {} =???=> {} {}",scene_name,member,command,brightness)
+            continue
+## Climate
+        elif domain in ['climate']:
+          if action in ['off']:
+            method = OFF
+          elif action in ['auto','cool','heat']:
+            method = 'set_hvac_mode'
             params['hvac_mode'] = command
-          elif command in ['home','away']:
-            service = 'climate/set_preset_mode'
+          elif action in ['home','away']:
+            method = 'set_preset_mode'
             params['preset_mode'] = command
           else:
-            self.error("Scene {} member {} unknown {} command {}",s,m,t,command)
+            self.error("Scene {} member {} unknown action {}",scene_name,member,action)
         else:
-          self.error("Scene {} member {} unknown type {}",s,m,t)
-
-        self.scene[s][e] = {}
-        self.scene[s][e]['service'] = service
-        self.scene[s][e]['namespace'] = n
-        if params:
-          self.scene[s][e]['params'] = params
+          self.error("Scene {} member {} unknown domain  {}",scene_name,member,domain)
+## Return scene_memebrs
+      scene_member = {}
+      scene_member['service_call'] = domain+'/'+method
+      scene_member['entity_id'] = entity_id
+      scene_member['namespace'] = namespace
+      scene_member.update(params)
+      scene_members.append(scene_member)
+    return scene_members
 
   def _event(self, event_name, data, kwargs):
     self.debug("Event {} with {}",event_name,data)
