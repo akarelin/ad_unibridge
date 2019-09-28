@@ -1,8 +1,5 @@
 import unibridge
-import json
-import re
-from datetime import datetime, time
-
+import datetime
 
 """
 247:
@@ -11,8 +8,6 @@ from datetime import datetime, time
 
   event: SCENE
   event_namespace: cv
-  topic: 'scene'
-  topic_namespace: cv_mqtt
 
   scenes:
   - evening
@@ -43,45 +38,45 @@ from datetime import datetime, time
 ON = "turn_on"
 OFF = "turn_off"
 
-class scene(unibridge.AppHybrid):
-  self.scene_list = []
-  self.scene = {}
-  self.topic = ""
-
+class scene(unibridge.App):
   def initialize(self):
     super().initialize()
-
+    self.scene_list = []
     self.scene_list = self.args['scenes']
+    self.scene = {}
+
     for scene_name in self.scene_list:
       self.scene[scene_name] = self.load_scene(scene_name)
       self.debug("Loaded scene {} with {}",scene_name,self.scene[scene_name])
-# Events      
-    self.listen_event(self._event, self.args['event'], namespace=self.args['event_namespace'])
-# MQTT
-    self.mqtt = self.get_app("mqtt")
-    self.mqtt.listen_event(self._mqtt, "MQTT_MESSAGE")
-    if self.args['topic']:
-      self.mqtt.subscribe(self.args['topic'])
-  
-  def _mqtt(self, event_name, data, kwargs):
-    if topic in data['topic']:
-      self.debug("Our topic {} Payload {}", data['topic'], data['payload'])
-    else:
-      self.debug("Not our topic {} Payload {}", data['topic'], data['payload'])
+    self.api.run_at_sunrise(self._sunrise, offset=0)
+    self.api.run_at_sunset(self._sunset, offset=0)
+    self.api.run_daily(self._night, datetime.time(22, 00, 0))
+    self.api.run_daily(self._sleep, datetime.time(23, 30, 0))
+    self.hass.listen_event(self._event, self.args['event'])
 
   def DoIt(self, scene_name):
+    if scene_name not in self.scene_list:
+      self.error("Unknown scene {}", scene_name)
+      return
+
     scene = self.scene[scene_name]
     for member in scene:
-      service = member.pop('service_call')
+      try:
+        service = member.pop('service_call')
+      except:
+        continue
       domain, method = service.split('/')
       self.debug("Calling service {} => {}",service,member)
-      self.call_service(service,**member)
+      self.hass.call_service(service,**member)
 
   def load_scene(self, scene_name):
     scene_members = []
-#    self.debug("Loading scene {} from {}",scene_name,self.args["members"])
+    self.debug("Loading scene {} from {}",scene_name,self.args["members"])
     for member,member_actions in self.args["members"].items():
-      action = member_actions.get(scene_name)
+      action = None
+      if member_actions:
+        action = member_actions.get(scene_name)
+      if not action and scene_name in ['morning','sleep']: action = 'off'
       if not action:
         self.debug("Member {} is not in scene {}",member,scene_name)
         continue
@@ -97,7 +92,7 @@ class scene(unibridge.AppHybrid):
         namespace = member.split('@')[1].strip()
       else:
         entity_id = member
-        namespace = self.args['default_namespace']
+        namespace = self.args.get('default','default')
       if '.' in entity_id:
         domain = entity_id.split('.')[0]
       else:
@@ -134,20 +129,20 @@ class scene(unibridge.AppHybrid):
           else:
             self.error("[Brightness] {} => {} =???=> {} {}",scene_name,member,command,brightness)
             continue
-## Climate
-        elif domain in ['climate']:
-          if action in ['off']:
-            method = OFF
-          elif action in ['auto','cool','heat']:
-            method = 'set_hvac_mode'
-            params['hvac_mode'] = command
-          elif action in ['home','away']:
-            method = 'set_preset_mode'
-            params['preset_mode'] = command
-          else:
-            self.error("Scene {} member {} unknown action {}",scene_name,member,action)
-        else:
-          self.error("Scene {} member {} unknown domain  {}",scene_name,member,domain)
+# ## Climate
+#         elif domain in ['climate']:
+#           if action in ['off']:
+#             method = OFF
+#           elif action in ['auto','cool','heat']:
+#             method = 'set_hvac_mode'
+#             params['hvac_mode'] = command
+#           elif action in ['home','away']:
+#             method = 'set_preset_mode'
+#             params['preset_mode'] = command
+#           else:
+#             self.error("Scene {} member {} unknown action {}",scene_name,member,action)
+        # else:
+        #   self.error("Scene {} member {} unknown domain  {}",scene_name,member,domain)
 ## Return scene_memebrs
       scene_member = {}
       scene_member['service_call'] = domain+'/'+method
@@ -157,10 +152,22 @@ class scene(unibridge.AppHybrid):
       scene_members.append(scene_member)
     return scene_members
 
+  def _sunrise(self, **kwargs):
+    self.debug("Got {}", **kwargs)
+    self.DoIt('morning')
+
+  def _sunset(self, **kwargs):
+    self.debug("Got {}", **kwargs)
+    self.DoIt('evening')
+
+  def _night(self, **kwargs):
+    self.debug("Got {}", **kwargs)
+    self.DoIt('night')
+
+  def _sleep(self, **kwargs):
+    self.debug("Got {}", **kwargs)
+    self.DoIt('sleep')
+
   def _event(self, event_name, data, kwargs):
     self.debug("Event {} with {}",event_name,data)
-    scene = data['scene']
-    if scene not in self.scene_list:
-      self.error("Unknown scene {}", scene)
-      return
-    self.DoIt(scene)
+    self.DoIt(data['scene'])
