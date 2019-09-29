@@ -10,10 +10,16 @@ import datetime
   event_namespace: cv
 
   scenes:
-  - evening
-  - night
-  - sleep
-  - morning
+    evening: 
+      time: sunset-30
+    night: 
+      time: 22:00
+    sleep: 
+      time: 00:30
+      default_action: 'off'
+    morning:
+      time: sunrise+0
+      default_action: 'off'
 
   default_namespace: cv
   members:
@@ -44,14 +50,18 @@ class scene(unibridge.App):
     self.scene_list = []
     self.scene_list = self.args['scenes']
     self.scene = {}
+    self.off_scenes = []
 
     for scene_name in self.scene_list:
       self.scene[scene_name] = self.load_scene(scene_name)
       self.debug("Loaded scene {} with {}",scene_name,self.scene[scene_name])
+      default_action = self.args['scenes'][scene_name].get('default_action')
+      if default_action == 'off': self.off_scenes.append(scene_name)
+
     self.api.run_at_sunrise(self._sunrise, offset=0)
     self.api.run_at_sunset(self._sunset, offset=0)
     self.api.run_daily(self._night, datetime.time(22, 00, 0))
-    self.api.run_daily(self._sleep, datetime.time(23, 30, 0))
+    self.api.run_daily(self._sleep, datetime.time(00, 30, 0))
     self.hass.listen_event(self._event, self.args['event'])
 
   def DoIt(self, scene_name):
@@ -65,9 +75,9 @@ class scene(unibridge.App):
         service = member.pop('service_call')
       except:
         continue
-      domain, method = service.split('/')
+#      domain, method = service.split('/')
       self.debug("Calling service {} => {}",service,member)
-      self.hass.call_service(service,**member)
+      self.hass.call_service(service, **member)
 
   def load_scene(self, scene_name):
     scene_members = []
@@ -76,8 +86,8 @@ class scene(unibridge.App):
       action = None
       if member_actions:
         action = member_actions.get(scene_name)
-      if not action and scene_name in ['morning','sleep']: action = 'off'
-      if not action:
+      if not action and scene_name in self.off_scenes: action = 'off'
+      elif not action:
         self.debug("Member {} is not in scene {}",member,scene_name)
         continue
 
@@ -127,7 +137,7 @@ class scene(unibridge.App):
           elif brightness > 1:
             params['brightness'] = int(brightness*2.55)
           else:
-            self.error("[Brightness] {} => {} =???=> {} {}",scene_name,member,command,brightness)
+            self.error("[Brightness] {} => {} =???=> {} {}",scene_name,member,method,brightness)
             continue
 # ## Climate
 #         elif domain in ['climate']:
