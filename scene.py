@@ -69,6 +69,8 @@ class scene(unibridge.App):
     self.api.run_daily(self._sleep, datetime.time(00, 30, 0))
     self.hass.listen_event(self._event, self.args['event'])
 
+    self.initialize_triggers(self.args['triggers'])
+
     for topic in self.topics:
 #      self.mqtt.mqtt_subscribe(topic)
       self.mqtt.listen_event(self._mqtt, "MQTT_MESSAGE", topic = topic)
@@ -199,3 +201,13 @@ class scene(unibridge.App):
       self.DoIt(scene)
     else:
       self.warn("Unknown payload {}", scene)
+
+  def _trigger_cb(self, *args):
+    event = args[0]
+    data = args[1]
+    if event in 'SCENE':
+      scene = data.get('scene')
+      if scene: self.DoIt(scene)
+      else: self.warn("Unknown scene {}", scene)
+    else:
+      self.debug("UNKNOWN {}", args)
