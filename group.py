@@ -101,8 +101,8 @@ class group(unibridge.App):
       else:
         self.error("Unkown state {}".format(self.state))
     if self.state == 'OFF' and self.timer:
-      self.timer
-
+      self.api.cancel_timer(self.timer)
+      self.timer = None
 
   def _publish(self):
     status = {}
