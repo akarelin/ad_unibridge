@@ -73,6 +73,7 @@ class AppBase(ad.ADBase):
 
 class App(AppBase):
   def initialize(self):
+    super().initialize()
     self.default_namespace = self.args.get('default_namespace','default')
     self.default_mqtt_namespace = self.args.get('default_mqtt_namespace','default_mqtt')
     self.hass = self.get_plugin_api(self.default_namespace)

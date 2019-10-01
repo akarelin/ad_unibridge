@@ -50,8 +50,8 @@ class group(unibridge.App):
     except: self.precision = 5
     interval = self.precision
     if self.state == 'ON':
-      start = datetime.datetime.now() + datetime.timedelta(0, interval)
       if self.timer: self.api.cancel_timer(self.timer)
+      start = datetime.datetime.now() + datetime.timedelta(0, interval)
       self.timer = self.api.run_every(self._timer, start = start, interval = interval)
 
   def light_on(self, brightness = 128):
@@ -68,10 +68,10 @@ class group(unibridge.App):
     self.debug("Setting entities {} effect {}",self.entities,self.effect)
     if self.effect == 'colorloop':
       self._set_colorloop()
-      if self.state == 'OFF' and self.timer:
-        self.api.cancel_timer(self.timer)
-      elif self.state == 'ON' and not self.timer:
-        self.init_colorloop()
+      # if self.state == 'OFF' and self.timer:
+      #   self.api.cancel_timer(self.timer)
+      # elif self.state == 'ON' and not self.timer:
+      #   self.init_colorloop()
     else:
       self._set_color()
     self._publish()
@@ -89,6 +89,9 @@ class group(unibridge.App):
         self.debug("Unkown state {}".format(self.state))
    
   def _set_colorloop(self):
+    if self.state == 'ON' and not self.timer:
+      self.init_mqtt()
+    
     second = datetime.datetime.now().second
     modulo=(second%(self.period*60))/10
 
@@ -101,8 +104,8 @@ class group(unibridge.App):
       else:
         self.error("Unkown state {}".format(self.state))
     if self.state == 'OFF' and self.timer:
-      self.timer
-
+      self.api.cancel_timer(self.timer)
+      self.timer = None
 
   def _publish(self):
     status = {}
