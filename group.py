@@ -68,10 +68,6 @@ class group(unibridge.App):
     self.debug("Setting entities {} effect {}",self.entities,self.effect)
     if self.effect == 'colorloop':
       self._set_colorloop()
-      # if self.state == 'OFF' and self.timer:
-      #   self.api.cancel_timer(self.timer)
-      # elif self.state == 'ON' and not self.timer:
-      #   self.init_colorloop()
     else:
       self._set_color()
     self._publish()
