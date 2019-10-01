@@ -60,25 +60,23 @@ class scene(unibridge.App):
     for scene_name in self.scene_list:
       self.scene[scene_name] = self.load_scene(scene_name)
       self.debug("Loaded scene {} with {}",scene_name,self.scene[scene_name])
-      default_action = self.args['scenes'][scene_name].get('default_action')
-      if default_action == 'off': self.off_scenes.append(scene_name)
 
     self.api.run_at_sunrise(self._sunrise, offset=0)
     self.api.run_at_sunset(self._sunset, offset=0)
     self.api.run_daily(self._night, datetime.time(22, 00, 0))
     self.api.run_daily(self._sleep, datetime.time(00, 30, 0))
-    self.hass.listen_event(self._event, self.args['event'])
-
+#    self.hass.listen_event(self._event, self.args['event'])
     self.initialize_triggers(self.args['triggers'])
 
-    for topic in self.topics:
+#    for topic in self.topics:
 #      self.mqtt.mqtt_subscribe(topic)
-      self.mqtt.listen_event(self._mqtt, "MQTT_MESSAGE", topic = topic)
+#      self.mqtt.listen_event(self._mqtt, "MQTT_MESSAGE", topic = topic)
 
   def DoIt(self, scene_name):
     if scene_name not in self.scene_list:
       self.error("Unknown scene {}", scene_name)
       return
+    self.debug('DoIt with {}', scene_name)
 
     scene = self.scene[scene_name]
     for member in scene:
@@ -90,16 +88,21 @@ class scene(unibridge.App):
       self.hass.call_service(service, **member)
 
   def load_scene(self, scene_name):
+    default_action = self.args['scenes'][scene_name].get('default_action')
+    if default_action == 'off': self.off_scenes.append(scene_name)
+   
     scene_members = []
 #    self.debug("Loading scene {} from {}",scene_name,self.args["members"])
     for member,member_actions in self.args["members"].items():
       action = None
       if member_actions:
         action = member_actions.get(scene_name)
-      if not action and scene_name in self.off_scenes: action = 'off'
-      elif not action:
-#        self.debug("Member {} is not in scene {}",member,scene_name)
-        continue
+      if not action:
+        if scene_name in self.off_scenes:
+          action = 'off'
+        else:
+          self.debug("Member {} is not in scene {}",member,scene_name)
+          continue
 
       method = ""
       namespace = ""
@@ -112,7 +115,7 @@ class scene(unibridge.App):
         namespace = member.split('@')[1].strip()
       else:
         entity_id = member
-        namespace = self.args.get('default','default')
+        namespace = self.default_namespace
       if '.' in entity_id:
         domain = entity_id.split('.')[0]
       else:
@@ -187,27 +190,32 @@ class scene(unibridge.App):
   def _sleep(self, **kwargs):
     self.debug("Got {}", **kwargs)
     self.DoIt('sleep')
+  
+  def _event(self, scene):
+    self.DoIt(scene)
 
-  def _event(self, event_name, data, kwargs):
-    self.debug("Event {} with {}",event_name,data)
-    self.DoIt(data['scene'])
+  # def _event(self, event_name, data, kwargs):
+  #   self.debug("Event {} with {}",event_name,data)
+  #   self.DoIt(data['scene'])
 
-  def _mqtt(self, event_name, data, kwargs):
-    self.debug("MQTT event {}",data)
-    if data.get('topic') not in self.topics:
-      return
-    scene = data.get('payload')
-    if scene in self.scene_list:
-      self.DoIt(scene)
-    else:
-      self.warn("Unknown payload {}", scene)
+  # def _mqtt(self, event_name, data, kwargs):
+  #   self.debug("MQTT event {}",data)
+  #   if data.get('topic') not in self.topics:
+  #     return
+  #   scene = data.get('payload')
+  #   if scene in self.scene_list:
+  #     self.DoIt(scene)
+  #   else:
+  #     self.warn("Unknown payload {}", scene)
 
-  def _trigger_cb(self, *args):
-    event = args[0]
-    data = args[1]
-    if event in 'SCENE':
-      scene = data.get('scene')
-      if scene: self.DoIt(scene)
-      else: self.warn("Unknown scene {}", scene)
-    else:
-      self.debug("UNKNOWN {}", args)
+
+  # def _event(self, event_type, data):
+  #   self.debug("{} with data {}", event_type, data)
+  #   if event_type == 'EVENT':
+  #     scene = data.get('scene')
+  #   elif event_type == 'MQTT':
+  #     scene = data.get('payload')
+
+  #   if scene: self.DoIt(scene)
+  #   else:
+  #     self.debug("UNKNOWN {}", data)
