@@ -11,18 +11,18 @@ import datetime
       event: SCENE
       event_namespace: cv
     - type: mqtt
-      topic: 'mode/time'
+      topic: 'mode/time/state'
 
   scenes:
     evening: 
-      time: sunset-30
+#      time: sunset-30
     night: 
-      time: 22:00
+#      time: 22:00
     sleep: 
-      time: 00:30
+#      time: 00:30
       default_action: 'off'
     morning:
-      time: sunrise+0
+#      time: sunrise+0
       default_action: 'off'
 
   default_namespace: cv
@@ -55,28 +55,26 @@ class scene(unibridge.App):
     self.scene_list = self.args['scenes']
     self.scene = {}
     self.off_scenes = []
-    self.topics = ['mode/time']
 
     for scene_name in self.scene_list:
       self.scene[scene_name] = self.load_scene(scene_name)
       self.debug("Loaded scene {} with {}",scene_name,self.scene[scene_name])
 
-    self.api.run_at_sunrise(self._sunrise, offset=0)
-    self.api.run_at_sunset(self._sunset, offset=0)
-    self.api.run_daily(self._night, datetime.time(22, 00, 0))
-    self.api.run_daily(self._sleep, datetime.time(00, 30, 0))
+    # self.api.run_at_sunrise(self._sunrise, offset=0)
+    # self.api.run_at_sunset(self._sunset, offset=0)
+    # self.api.run_daily(self._night, datetime.time(22, 00, 0))
+    # self.api.run_daily(self._sleep, datetime.time(00, 30, 0))
 #    self.hass.listen_event(self._event, self.args['event'])
-    self.initialize_triggers(self.args['triggers'])
 
 #    for topic in self.topics:
 #      self.mqtt.mqtt_subscribe(topic)
 #      self.mqtt.listen_event(self._mqtt, "MQTT_MESSAGE", topic = topic)
 
-  def DoIt(self, scene_name):
+  def immediate(self, scene_name):
     if scene_name not in self.scene_list:
-      self.error("Unknown scene {}", scene_name)
+      self.error("Unknown immediate scene {}", scene_name)
       return
-    self.debug('DoIt with {}', scene_name)
+    self.debug('Executing immediate scene {}', scene_name)
 
     scene = self.scene[scene_name]
     for member in scene:
@@ -175,47 +173,5 @@ class scene(unibridge.App):
       scene_members.append(scene_member)
     return scene_members
 
-  def _sunrise(self, **kwargs):
-    self.debug("Got {}", **kwargs)
-    self.DoIt('morning')
-
-  def _sunset(self, **kwargs):
-    self.debug("Got {}", **kwargs)
-    self.DoIt('evening')
-
-  def _night(self, **kwargs):
-    self.debug("Got {}", **kwargs)
-    self.DoIt('night')
-
-  def _sleep(self, **kwargs):
-    self.debug("Got {}", **kwargs)
-    self.DoIt('sleep')
-  
   def _event(self, scene):
-    self.DoIt(scene)
-
-  # def _event(self, event_name, data, kwargs):
-  #   self.debug("Event {} with {}",event_name,data)
-  #   self.DoIt(data['scene'])
-
-  # def _mqtt(self, event_name, data, kwargs):
-  #   self.debug("MQTT event {}",data)
-  #   if data.get('topic') not in self.topics:
-  #     return
-  #   scene = data.get('payload')
-  #   if scene in self.scene_list:
-  #     self.DoIt(scene)
-  #   else:
-  #     self.warn("Unknown payload {}", scene)
-
-
-  # def _event(self, event_type, data):
-  #   self.debug("{} with data {}", event_type, data)
-  #   if event_type == 'EVENT':
-  #     scene = data.get('scene')
-  #   elif event_type == 'MQTT':
-  #     scene = data.get('payload')
-
-  #   if scene: self.DoIt(scene)
-  #   else:
-  #     self.debug("UNKNOWN {}", data)
+    self.immediate(scene)

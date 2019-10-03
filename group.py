@@ -49,8 +49,13 @@ class group(unibridge.App):
     try: self.precision = int(self.args["precision"])
     except: self.precision = 5
     interval = self.precision
-    if self.state == 'ON':
-      if self.timer: self.api.cancel_timer(self.timer)
+
+    # if self.timer:
+    #   self.debug("Cancelling timer")
+    #   self.api.cancel_timer(self.timer)
+    #   self.debug("API {} {}",type(self.api),repr(self.api))
+    # if self.state == 'ON':
+    if not self.timer:
       start = datetime.datetime.now() + datetime.timedelta(0, interval)
       self.timer = self.api.run_every(self._timer, start = start, interval = interval)
 
@@ -86,7 +91,7 @@ class group(unibridge.App):
    
   def _set_colorloop(self):
     if self.state == 'ON' and not self.timer:
-      self.init_mqtt()
+      self.init_colorloop()
     
     second = datetime.datetime.now().second
     modulo=(second%(self.period*60))/10
@@ -99,9 +104,11 @@ class group(unibridge.App):
         self.hass.turn_off(entity)
       else:
         self.error("Unkown state {}".format(self.state))
-    if self.state == 'OFF' and self.timer:
-      self.api.cancel_timer(self.timer)
-      self.timer = None
+
+    # self.debug("State {} timer {}",self.state,self.timer)
+    # if self.state == 'OFF' and self.timer:
+    #   self.api.cancel_timer(self.timer)
+    #   self.timer = None
 
   def _publish(self):
     status = {}
@@ -119,7 +126,7 @@ class group(unibridge.App):
       self.debug("No status topic")
 
   def _timer(self, kwargs):
-    self._set()
+    if self.state == 'ON': self._set()
 
   def _event(self, data):
     if data in ['ON','OFF']: 
