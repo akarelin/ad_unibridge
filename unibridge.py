@@ -111,15 +111,10 @@ class App(AppBase):
   def _event_callback(self, *args):
     event = args[0]
     data = args[1]
-    # self.debug("!!!!! Event Callback {} {}",event, data)
-    # self.debug("!!!!! Trigger Data {}",self.trigger_data)
     
     for t in self.trigger_data:
-#      self.debug("!!! Trigger {}",t)
       payload = None
       if t['event'] != event: continue
       if event == EVENT_MQTT: payload = data.get('payload')
       else: payload = data
-      
-#      self.debug("!!!!! Payload {}",payload)
       if payload: self._event(payload)

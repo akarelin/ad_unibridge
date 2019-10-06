@@ -16,7 +16,10 @@ import datetime
   scenes:
     evening: 
 #      time: sunset-30
+<<<<<<< HEAD
       
+=======
+>>>>>>> e01953cf6eecd293cac0d53e34d04ba4cfc7f841
     night: 
 #      time: 22:00
     sleep: 
@@ -61,12 +64,6 @@ class scene(unibridge.App):
     for scene_name in self.scene_list:
       self.scene[scene_name] = self.load_scene(scene_name)
       self.debug("Loaded scene {} with {}",scene_name,self.scene[scene_name])
-
-#    self.hass.listen_event(self._event, self.args['event'])
-
-#    for topic in self.topics:
-#      self.mqtt.mqtt_subscribe(topic)
-#      self.mqtt.listen_event(self._mqtt, "MQTT_MESSAGE", topic = topic)
 
   def immediate(self, scene_name):
     if scene_name not in self.scene_list:
