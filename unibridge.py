@@ -96,19 +96,19 @@ class App(AppBase):
       if trigger['type'] == 'event':
         trigger['namespace'] = t.get('namespace',self.default_namespace)
         trigger['event'] = t.get('event')
-        trigger['handle'] = self.hass.listen_event(self._event_callback, trigger['event'], namespace = trigger['namespace'])
+        trigger['handle'] = self.hass.listen_event(self._event_callback, event = trigger['event'], namespace = trigger['namespace'])
       elif trigger['type'] == 'mqtt':
         trigger['topic'] = t.get('topic')
         trigger['namespace'] = t.get('namespace',self.default_mqtt_namespace)
         trigger['event'] = EVENT_MQTT
-        trigger['handle'] = self.mqtt.listen_event(self._event_callback, trigger['event'], topic = trigger['topic'])
+        trigger['handle'] = self.mqtt.listen_event(self._event_callback, event = trigger['event'], topic = trigger['topic'])
       self.trigger_data.append(trigger)
 
   @abstractmethod
   def trigger(self, payload):
     raise NotImplementedError
 
-  def _event_callback(self, event, data, **kwargs):
+  def _event_callback(self, event, data, kwargs):
     for t in self.trigger_data:
       payload = None
       if t['event'] != event: continue
