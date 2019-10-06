@@ -25,47 +25,10 @@ class dynamic(unibridge.App):
     super().initialize()
     self.members = []
     self.effect = self.args.get('effect')
-<<<<<<< HEAD
     self.period = 60
     self.precision = 5
     self.brightness = None
     self.default_brightness = 127
-=======
-
-    if self.effect == 'colorloop':
-      self.init_colorloop()
-    self.init_mqtt()
-
-  def init_mqtt(self):
-    topic = self.args["topic"]
-    self.topic_state = topic + '/state'
-    self.topic_set = topic + '/set'
-    trigger = {'type':'mqtt','topic':self.topic_set}
-    self.initialize_triggers([trigger])
-
-  def init_colorloop(self):
-    try: self.period = int(self.args["period"])
-    except: self.period = 60
-    try: self.precision = int(self.args["precision"])
-    except: self.precision = 5
-    interval = self.precision
-
-    # if self.timer:
-    #   self.debug("Cancelling timer")
-    #   self.api.cancel_timer(self.timer)
-    #   self.debug("API {} {}",type(self.api),repr(self.api))
-    # if self.state == 'ON':
-    if not self.timer:
-      start = datetime.datetime.now() + datetime.timedelta(0, interval)
-      self.timer = self.api.run_every(self._timer, start = start, interval = interval)
-
-  def light_on(self, brightness = 128):
-    self.state = 'ON'
-    self.brightness = brightness
-    self.debug("Switching on")
-    self._set()
-  def light_off(self):
->>>>>>> e01953cf6eecd293cac0d53e34d04ba4cfc7f841
     self.state = 'OFF'
     if self.args.get('topic'):
       self.topic_state = self.args['topic']+'/state'
@@ -74,18 +37,9 @@ class dynamic(unibridge.App):
 
     self.load_members()
     self.debug("Members {}",self.members)
-#    self.mqtt.listen_event(self._event, 'MQTT_MESSAGE', topic = self.topic_set)
     self.api.run_minutely(self._timer, start = None)
     self._update()
 
-  # def turn_on(self, brightness = 128):
-  #   self.state = 'ON'
-  #   self.brightness = brightness
-  #   self._update()
-  # def turn_off(self):
-  #   self.state = 'OFF'
-  #   self._update()
-  
   def _update(self):
     now = datetime.datetime.now()
     angle_offset = now.minute*6
