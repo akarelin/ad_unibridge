@@ -16,10 +16,6 @@ import datetime
   scenes:
     evening: 
 #      time: sunset-30
-<<<<<<< HEAD
-      
-=======
->>>>>>> e01953cf6eecd293cac0d53e34d04ba4cfc7f841
     night: 
 #      time: 22:00
     sleep: 
@@ -170,6 +166,16 @@ class scene(unibridge.App):
       scene_members.append(scene_member)
     return scene_members
 
-  def _event(self, scene):
-    self.immediate(scene)
+  def trigger(self, payload):
+    if type(payload) == dict:
+      scene_name = payload.get('scene')
+    elif type(payload) == str:
+      scene_name = payload
+    else:
+      self.error("Unrecognized payload {}", payload)
+      return
 
+    if scene_name in self.scene_list:
+      self.immediate(scene_name)
+    else:
+      self.error("Unrecognized scene {}", scene_name)

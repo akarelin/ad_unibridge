@@ -105,16 +105,13 @@ class App(AppBase):
       self.trigger_data.append(trigger)
 
   @abstractmethod
-  def _event(self, *args):
+  def trigger(self, payload):
     raise NotImplementedError
 
-  def _event_callback(self, *args):
-    event = args[0]
-    data = args[1]
-    
+  def _event_callback(self, event, data, **kwargs):
     for t in self.trigger_data:
       payload = None
       if t['event'] != event: continue
       if event == EVENT_MQTT: payload = data.get('payload')
       else: payload = data
-      if payload: self._event(payload)
+      if payload: self.trigger(payload)

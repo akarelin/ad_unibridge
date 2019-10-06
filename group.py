@@ -35,12 +35,12 @@ class dynamic(unibridge.App):
       self.topic_set = self.args['topic']+'/set'
       self.initialize_triggers([{'type':'mqtt','topic':self.topic_set}])
 
-    self.load_members()
+    self._init_members()
     self.debug("Members {}",self.members)
     self.api.run_minutely(self._timer, start = None)
-    self._update()
+    self.update_members()
 
-  def _update(self):
+  def update_members(self):
     now = datetime.datetime.now()
     angle_offset = now.minute*6
 
@@ -63,9 +63,24 @@ class dynamic(unibridge.App):
 
       self.debug("Calling {} => {}", service_call, service_parameters)
       self.hass.call_service(service_call, **service_parameters)
-    self.publish()
+    self.publish_state()
 
-  def load_members(self):
+  def publish_state(self):
+    value = {}
+    value['state']=self.state
+    if self.state == 'ON':
+      if self.brightness:
+        value['brightness']=self.brightness
+      # if self.rgb_color:
+      #   value['rgb_color']=self.rgb_color
+    payload_json = json.dumps(value)
+    if self.topic_state:
+      self.debug("Status Publish to Topic {} Payload {}", self.topic_state, payload_json)
+      self.mqtt.mqtt_publish(topic=self.topic_state, payload=payload_json)
+    else:
+      self.debug("No status topic")
+
+  def _init_members(self):
     members = self.args.get('members')
     if not members:
       self.error("No members!")
@@ -94,42 +109,27 @@ class dynamic(unibridge.App):
       if self.effect == 'colorloop': member_object['angle'] = int(i*360/member_count)
       self.members.append(member_object)
 
-  def extract(self, value):
+  def _load_state(self, s):
 #    self.debug("Extracting state from {}", value)
-    if value in ['OFF','ON']:
-      self.state = value
-      if value in ['ON']: self.brightness = self.default_brightness
+    if s in ['OFF','ON']:
+      self.state = s
+      if s in ['ON']: self.brightness = self.default_brightness
     else:
-      jv = json.loads(value)
-      state = jv.get('state')
-      if state not in ['ON','OFF']:
-        self.error("Unknown state {}",state)
+      j = json.loads(s)
+      s = j.get('state')
+      if s not in ['ON','OFF']:
+        self.error("Unknown state {}",s)
         return
       else:
-        self.state = state
-      brightness = jv.get('brightness',self.default_brightness)
+        self.state = s
+      brightness = j.get('brightness',self.default_brightness)
       if brightness: self.brightness = brightness
 #    self.debug("Extracted {} {}", self.state, self.brightness)
   
-  def publish(self):
-    value = {}
-    value['state']=self.state
-    if self.state == 'ON':
-      if self.brightness:
-        value['brightness']=self.brightness
-      # if self.rgb_color:
-      #   value['rgb_color']=self.rgb_color
-    payload_json = json.dumps(value)
-    if self.topic_state:
-      self.debug("Status Publish to Topic {} Payload {}", self.topic_state, payload_json)
-      self.mqtt.mqtt_publish(topic=self.topic_state, payload=payload_json)
-    else:
-      self.debug("No status topic")
-
   def _timer(self, kwargs):
-    if self.state == 'ON': self._update()
-    else: self.publish()
+    if self.state == 'ON': self.update_members()
+    else: self.publish_state()
 
-  def _event(self, value):
-    self.extract(value)
-    self._update()
+  def trigger(self, s):
+    self._load_state(s)
+    self.update_members()
