@@ -16,6 +16,7 @@ import datetime
   scenes:
     evening: 
 #      time: sunset-30
+      
     night: 
 #      time: 22:00
     sleep: 
@@ -55,15 +56,12 @@ class scene(unibridge.App):
     self.scene_list = self.args['scenes']
     self.scene = {}
     self.off_scenes = []
+    self.debug("Secenes {}", self.scene_list)
 
     for scene_name in self.scene_list:
       self.scene[scene_name] = self.load_scene(scene_name)
       self.debug("Loaded scene {} with {}",scene_name,self.scene[scene_name])
 
-    # self.api.run_at_sunrise(self._sunrise, offset=0)
-    # self.api.run_at_sunset(self._sunset, offset=0)
-    # self.api.run_daily(self._night, datetime.time(22, 00, 0))
-    # self.api.run_daily(self._sleep, datetime.time(00, 30, 0))
 #    self.hass.listen_event(self._event, self.args['event'])
 
 #    for topic in self.topics:
@@ -86,11 +84,13 @@ class scene(unibridge.App):
       self.hass.call_service(service, **member)
 
   def load_scene(self, scene_name):
-    default_action = self.args['scenes'][scene_name].get('default_action')
+    default_action = None
+    scene_settings = self.args['scenes'].get(scene_name)
+    if scene_settings:
+      default_action = scene_settings.get('default_action')
     if default_action == 'off': self.off_scenes.append(scene_name)
    
     scene_members = []
-#    self.debug("Loading scene {} from {}",scene_name,self.args["members"])
     for member,member_actions in self.args["members"].items():
       action = None
       if member_actions:
@@ -175,3 +175,4 @@ class scene(unibridge.App):
 
   def _event(self, scene):
     self.immediate(scene)
+
