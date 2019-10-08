@@ -30,6 +30,20 @@ ERROR
 LOG_DEBUG = 'debug_log'
 LOG_LINE_LENGTH = 80
 
+STATE_PARAMETERS = [
+  'attribute',
+  'duration',
+  'new',
+  'old',
+  'duration',
+  'timeout',
+  'immediate',
+  'oneshot',
+  'namespace',
+  'pin',
+  'pin_thread']
+
+
 class AppBase(ad.ADBase):
   api = None
 
@@ -84,25 +98,68 @@ class App(AppBase):
     self.debug("Triggers {}", triggers)
     for t in triggers:
       trigger = {}
+      data = {}
       trigger['type'] = t.get('type')
-
-      trigger['payload_type'] = t.get('payload_type','raw')
-      if trigger['payload_type'] in ['json']:
-        trigger['key'] = t.get('key')
-        if not trigger['key']:
-          self.warn("Unknown key {}", trigger['key'])
-          continue
       
-      if trigger['type'] == 'event':
-        trigger['namespace'] = t.get('namespace',self.default_namespace)
-        trigger['event'] = t.get('event')
-        trigger['handle'] = self.hass.listen_event(self._event_callback, event = trigger['event'], namespace = trigger['namespace'])
-      elif trigger['type'] == 'mqtt':
-        trigger['topic'] = t.get('topic')
-        trigger['namespace'] = t.get('namespace',self.default_mqtt_namespace)
-        trigger['event'] = EVENT_MQTT
-        trigger['handle'] = self.mqtt.listen_event(self._event_callback, event = trigger['event'], topic = trigger['topic'])
-      self.trigger_data.append(trigger)
+      if trigger['type'] == 'mqtt':
+        data['namespace'] = t.get('namespace', self.default_mqtt_namespace)
+        data['event'] = EVENT_MQTT
+        data['topic'] = t.get('topic')
+        data.update(t.get('data'))
+        trigger['data'] = data
+        trigger['handle'] = self.mqtt.listen_event(self._event_callback, **data)
+        self.trigger_data.append(trigger)
+        continue
+      elif trigger['type'] == 'event':
+        data['namespace'] = t.get('namespace', self.default_namespace)
+        data['event'] = t.get('event')
+        data.update(t.get('data'))
+        trigger['data'] = data
+        trigger['handle'] = self.hass.listen_event(self._event_callback, **data)
+        self.trigger_data.append(trigger)
+        continue
+      elif trigger['type'] == 'state':
+        entities = []
+        state_entities = t.get('entities')
+        if isinstance(state_entities,str):
+          entities = [state_entities]
+        elif isinstance(state_entities,list):
+          entities = state_entities
+        else
+          self.error("Invalid entities {}",state_entities)
+          continue
+
+        for e in entities:
+          trigger = {}
+          data = {}
+          trigger['type'] = t.get('type')
+          trigger['entity'] = e
+          data['namespace'] = t.get('namespace', self.default_namespace)
+          data.update(t.get('data'))
+          trigger['data'] = data
+          trigger['handle'] = self.api.listen_state(self._state_callback, **data)
+          self.trigger_data.append(trigger)
+
+      # trigger['payload_type'] = t.get('payload_type','raw')
+      # if trigger['payload_type'] in ['json']:
+      #   trigger['key'] = t.get('key')
+      #   if not trigger['key']:
+      #     self.warn("Unknown key {}", trigger['key'])
+      #     continue
+
+      # if trigger['type'] == 'event':
+
+      #   trigger['namespace'] = t.get('namespace',self.default_namespace)
+      #   trigger['event'] = t.get('event')
+      #   trigger['handle'] = self.hass.listen_event(self._event_callback, event = trigger['event'], namespace = trigger['namespace'])
+      # elif trigger['type'] == 'mqtt':
+      #   trigger['topic'] = t.get('topic')
+      #   trigger['namespace'] = t.get('namespace',self.default_mqtt_namespace)
+      #   trigger['event'] = EVENT_MQTT
+      #   trigger['handle'] = self.mqtt.listen_event(self._event_callback, event = trigger['event'], topic = trigger['topic'])
+      # elif trigger['type'] == 'state':
+      #   trigger['namespace'] = t.get('namespace',self.default_namespace)
+
 
   @abstractmethod
   def trigger(self, payload):
@@ -115,3 +172,13 @@ class App(AppBase):
       if event == EVENT_MQTT: payload = data.get('payload')
       else: payload = data
       if payload: self.trigger(payload)
+  
+  def _state_callback(self, entity, attribute, old, new, kwargs):
+    for t in self.trigger_data:
+      if t['entity'] != entity: continue
+      payload = {}
+      payload['entity'] = entity
+      payload['attribute'] = attribute
+      payload['old'] = old
+      payload['new'] = new
+      self.trigger(payload)
