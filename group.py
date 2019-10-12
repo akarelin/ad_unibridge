@@ -20,6 +20,10 @@ colorloop:
     - hue_bedroom_bedsplash_2
 """
 
+class static(unibridge.App):
+  def initialize(self):
+    super().initialize()
+
 class dynamic(unibridge.App):
   def initialize(self):
     super().initialize()
