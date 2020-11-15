@@ -1,0 +1,41 @@
+247:
+  module: scene
+  class: scene
+
+  triggers:
+    - type: event
+      event: SCENE
+      event_namespace: seven
+    # - type: mqtt
+    #   topic: 'mode/time/state'
+
+  scenes:
+    evening: 
+#      time: sunset-30
+    night: 
+#      time: 22:00
+    sleep: 
+#      time: 00:30
+      default_action: 'off'
+    morning:
+#      time: sunrise+0
+      default_action: 'off'
+
+  default_namespace: seven
+  members:
+    front_lamps @ cv:
+      evening: 33
+    courtyard_colorloop:
+      evening: 33
+      night: 16
+      sleep: 'off'
+      day: 'off'      
+    hue_front_color @ cv_primary:
+      evening: 81,255,101 @ 50
+      night: 81,255,101 @ 33
+      sleep: 81,255,101 @ 25
+      day: 'off'
+    climate.downstairs:
+      home: cool
+      sleep: 'off'
+      away: 'off'      
