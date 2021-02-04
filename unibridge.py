@@ -46,6 +46,7 @@ STATE_PARAMETERS = [
 TRIGGER_STATE = 'state'
 TRIGGER_MQTT = 'mqtt'
 TRIGGER_EVENT = 'event'
+TRIGGER_TIMER = 'timer'
 
 class AppBase(ad.ADBase):
   api = None
@@ -71,6 +72,40 @@ class AppBase(ad.ADBase):
 
     if l == 'DEBUG': self.api.log(msg = m, level = "INFO", log = LOG_DEBUG)
     else: self.api.log(msg = m, level = l)
+
+class MqttApp(AppBase):
+  mqtt = None
+  triggers = []
+  
+  def initialize(self):
+    super().initialize()
+    self.mqtt = self.get_plugin_api(self.args.get('mqtt_namespace','mqtt'))
+    self.add_triggers()
+  def add_triggers(self, triggers = []):
+    if not triggers: triggers = self.args.get('triggers')
+    if not triggers: return
+   
+    self.debug("Triggers {}", triggers)
+    for t in triggers:
+      if t['type'] == TRIGGER_TIMER: self.add_time_trigger(t)
+      else:
+        self.error("Invalid trigger type {}",t)
+        continue
+  def add_time_trigger(self, trigger):
+    t = {}
+    interval = trigger.get('interval')
+    if not interval:
+      self.error("Unknown trigger {}", trigger)
+      return
+    t['interval'] = interval
+    start = trigger.get('start',"now")
+    t['start'] = start`
+    t['handle'] = self.api.run_every(self.trigger, start, interval)
+    self.triggers.append(t)
+
+  @abstractmethod
+  def trigger(self, payload):
+    raise NotImplementedError
 
 class App(AppBase):
   default_namespace = None
@@ -175,7 +210,7 @@ class App(AppBase):
     for t in self.triggers:
       if t['entity'] != entity: continue
       payload = {}
-      payload['entity'] = entity
+      payload['sentity'] = entity
       payload['attribute'] = attribute
       payload['old'] = old
       payload['new'] = new

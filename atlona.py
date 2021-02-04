@@ -19,19 +19,15 @@ INPUTS = {
 #    'BYOD': 'BYOD'
 }
 
-class Atlona(unibridge.AppBase):
+class Atlona(unibridge.MqttApp):
   inputs = []
   outputs = {"HDMI": None, "HDBT": None}
   devices = []
   tn = None
-  mqtt = None
 
   def initialize(self):
-    super().initialize()
-    self.mqtt = self.get_plugin_api('mqtt')
-
     self.refresh()
-    self.api.run_every(self._timer, "now+60", 5*60)
+    super().initialize()
 
   def refresh(self):
     self.query()
@@ -66,7 +62,7 @@ class Atlona(unibridge.AppBase):
     self.mqtt.mqtt_publish("atlona/state/output/hdmi", self.outputs['HDMI'])
     self.mqtt.mqtt_publish("atlona/state/output/hdbt", self.outputs['HDBT'])
     
-  def _timer(self, kwargs):
+  def trigger(self, kwargs):
     self.refresh()
 
 # region Internals
