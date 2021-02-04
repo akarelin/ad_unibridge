@@ -47,7 +47,6 @@ TRIGGER_STATE = 'state'
 TRIGGER_MQTT = 'mqtt'
 TRIGGER_EVENT = 'event'
 
-
 class AppBase(ad.ADBase):
   api = None
 
@@ -85,6 +84,9 @@ class App(AppBase):
     self.default_namespace = self.args.get('default_namespace','default')
     self.default_mqtt_namespace = self.args.get('default_mqtt_namespace','default_mqtt')
     self.hass = self.get_plugin_api(self.default_namespace)
+
+    self.debug("Namespace {} hass {}", self.default_namespace, self.hass)    
+
     self.mqtt = self.get_plugin_api(self.default_mqtt_namespace)
     self.add_triggers()
 
@@ -94,6 +96,21 @@ class App(AppBase):
   #       self.hass.cancel_listen_event(t['handle'])
   #     elif t['type'] == TRIGGER_MQTT:
   #       self.mqtt.cancel_listen_event(t['handle'])
+
+  def add_triggers(self, triggers = []):
+    if not triggers: triggers = self.args.get('triggers')
+    if not triggers: return
+   
+    self.debug("Triggers {}", triggers)
+    for t in triggers:
+      if t['type'] == TRIGGER_MQTT:
+        t['event'] = EVENT_MQTT
+        self.add_event_trigger(t)
+      elif t['type'] == TRIGGER_EVENT: self.add_event_trigger(t)
+      elif t['type'] == TRIGGER_STATE: self.add_state_trigger(t)
+      else:
+        self.error("Invalid trigger type {}",t)
+        continue
   
   def add_event_trigger(self, event_data):
     data = event_data
@@ -103,16 +120,19 @@ class App(AppBase):
     trigger = {}
     trigger['event'] = data['event']
 
+#    self.debug("Trigger @ 121 {}", trigger)
     if not data.get('namespace'):
       if data['event'] == EVENT_MQTT: data['namespace'] = self.default_mqtt_namespace
       else: data['namespace'] = self.default_namespace
 
+#    self.debug("Data @ 125 {}", data)
     if data['event'] == EVENT_MQTT:
       trigger['type'] = TRIGGER_MQTT
       trigger['handle'] = self.mqtt.listen_event(self._event_callback, **data)
     else:
       trigger['type'] = TRIGGER_EVENT
       trigger['handle'] = self.hass.listen_event(self._event_callback, **data)
+#      trigger['handle'] = self.api.listen_event(self._event_callback, **data)
 
     if trigger['handle']: self.triggers.append(trigger)
     else: self.error("Trigger no bueno")
@@ -138,26 +158,12 @@ class App(AppBase):
     for e in entities:
       self.add_state_trigger_entity(entity = e, state_data = state_data)
 
-  def add_triggers(self, triggers = []):
-    if not triggers: triggers = self.args.get('triggers')
-    if not triggers: return
-   
-    self.debug("Triggers {}", triggers)
-    for t in triggers:
-      if t['type'] == TRIGGER_MQTT:
-        t['event'] = EVENT_MQTT
-        self.add_event_trigger(t)
-      elif t['type'] == TRIGGER_EVENT: self.add_event_trigger(t)
-      elif t['type'] == TRIGGER_STATE: self.add_state_trigger(t)
-      else:
-        self.error("Invalid trigger type {}",t)
-        continue
-
   @abstractmethod
   def trigger(self, payload):
     raise NotImplementedError
 
   def _event_callback(self, event, data, kwargs):
+    self.debug("Event {} data {}", event, data)
     for t in self.triggers:
       payload = None
       if t['event'] != event: continue

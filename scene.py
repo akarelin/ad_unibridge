@@ -167,6 +167,7 @@ class scene(unibridge.App):
     return scene_members
 
   def trigger(self, payload):
+    self.debug("Scene triggered {}", payload)
     if type(payload) == dict:
       scene_name = payload.get('scene')
     elif type(payload) == str:
