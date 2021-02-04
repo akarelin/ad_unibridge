@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 
 from datetime import datetime, time
 
+# region Constants
 LOG_PREFIX_NONE = ""
 LOG_PREFIX_STATUS = "---"
 LOG_PREFIX_ALERT = "***"
@@ -47,7 +48,9 @@ TRIGGER_STATE = 'state'
 TRIGGER_MQTT = 'mqtt'
 TRIGGER_EVENT = 'event'
 TRIGGER_TIMER = 'timer'
+# endregion
 
+# region AppBase
 class AppBase(ad.ADBase):
   api = None
 
@@ -72,7 +75,9 @@ class AppBase(ad.ADBase):
 
     if l == 'DEBUG': self.api.log(msg = m, level = "INFO", log = LOG_DEBUG)
     else: self.api.log(msg = m, level = l)
+# endregion
 
+# region MqttApp
 class MqttApp(AppBase):
   mqtt = None
   triggers = []
@@ -80,7 +85,9 @@ class MqttApp(AppBase):
   def initialize(self):
     super().initialize()
     self.mqtt = self.get_plugin_api(self.args.get('mqtt_namespace','mqtt'))
+    self.debug("Triggers {}", self.args.get('triggers'))
     self.add_triggers()
+
   def add_triggers(self, triggers = []):
     if not triggers: triggers = self.args.get('triggers')
     if not triggers: return
@@ -89,8 +96,9 @@ class MqttApp(AppBase):
     for t in triggers:
       if t['type'] == TRIGGER_TIMER: self.add_time_trigger(t)
       else:
-        self.error("Invalid trigger type {}",t)
+        self.error("Invalid trigger type {}", t)
         continue
+
   def add_time_trigger(self, trigger):
     t = {}
     interval = trigger.get('interval')
@@ -99,14 +107,17 @@ class MqttApp(AppBase):
       return
     t['interval'] = interval
     start = trigger.get('start',"now")
-    t['start'] = start`
+    t['start'] = start
     t['handle'] = self.api.run_every(self.trigger, start, interval)
     self.triggers.append(t)
+
 
   @abstractmethod
   def trigger(self, payload):
     raise NotImplementedError
+# endregion
 
+# region App
 class App(AppBase):
   default_namespace = None
   default_mqtt_namespace = None
@@ -215,3 +226,4 @@ class App(AppBase):
       payload['old'] = old
       payload['new'] = new
       self.trigger(payload)
+# endregion      

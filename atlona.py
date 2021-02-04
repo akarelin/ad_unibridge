@@ -9,6 +9,7 @@ atlona:
   module: atlona
   class: Atlona
 
+  base_topic: atlona
 """
 
 INPUTS = {
@@ -23,11 +24,23 @@ class Atlona(unibridge.MqttApp):
   inputs = []
   outputs = {"HDMI": None, "HDBT": None}
   devices = []
+  all_devices = []
   tn = None
 
   def initialize(self):
-    self.refresh()
     super().initialize()
+    self.refresh()
+    
+    self.mqtt.mqtt_subscribe('atlona/output/+/set')
+    self.mqtt.listen_event(self._mqtt_callback, "MQTT_MESSAGE", wildcard = 'atlona/output/#')
+
+  def _mqtt_callback(self, event_name, data, kwargs):
+    topic = data.get('topic')
+    payload = data.get('payload')
+    output = topic.split('/')[2]
+    device = payload
+    self.debug("Callback {} {}", output, device)
+    self.set_output(output, device)
 
   def refresh(self):
     self.query()
@@ -41,6 +54,7 @@ class Atlona(unibridge.MqttApp):
     self.devices = []
     for i in self.inputs:
       d = i.get('device')
+      self.all_devices.append(d)
       state = i.get('state')
       if state and d:
         self.devices.append(d)
@@ -63,6 +77,21 @@ class Atlona(unibridge.MqttApp):
     self.mqtt.mqtt_publish("atlona/state/output/hdbt", self.outputs['HDBT'])
     
   def trigger(self, kwargs):
+    self.refresh()
+
+  def set_output(self, output, device):
+    out_index = int(output)
+    if out_index not in [0,1]:
+      self.error("Invalud output {}", output)
+      return
+    
+    if device not in self.devices:
+      self.error("Invalud device {}", device)
+    dev_index = self.all_devices.index(device)
+
+    cmd = f"Display:Matrix:Set {dev_index} {out_index}"
+    self.debug(cmd)
+    self.send_command(cmd)
     self.refresh()
 
 # region Internals
@@ -93,6 +122,12 @@ class Atlona(unibridge.MqttApp):
 #      self.debug("\n{}", i)
       self.inputs.append(i)
 #    self.debug("Inputs: {}", self.inputs)
+  def send_command(self, cmd, timeout = 30):
+    self._start()
+    result = self._cmd(cmd, timeout = timeout)
+    self._end()
+    return result
+
 # endregion
 
 # region Telnet
@@ -112,7 +147,7 @@ class Atlona(unibridge.MqttApp):
     self.tn.write(bcmd)
     raw = self.tn.read_until(b"#\n", timeout)
     response = raw.decode('ascii').split('\n#')[0]
-#    self.debug("Raw {} Parsed {}", raw, response)
+    self.debug("Raw {} Parsed {}", raw, response)
     return response
 
   def _parse_input(self, hr):
