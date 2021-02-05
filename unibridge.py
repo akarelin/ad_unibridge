@@ -111,7 +111,6 @@ class MqttApp(AppBase):
     t['handle'] = self.api.run_every(self.trigger, start, interval)
     self.triggers.append(t)
 
-
   @abstractmethod
   def trigger(self, payload):
     raise NotImplementedError
