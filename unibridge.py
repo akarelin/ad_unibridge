@@ -3,6 +3,7 @@ import mqttapi as mqtt
 import adbase as ad
 import adapi as adapi
 from abc import ABC, abstractmethod
+import logging
 
 from datetime import datetime, time
 
@@ -53,8 +54,11 @@ TRIGGER_TIMER = 'timer'
 # region AppBase
 class AppBase(ad.ADBase):
   api = None
+  log = None
+  dlog = None
 
   def initialize(self):
+    logging.basicConfig(filename="ad_base", )
     self.api = self.get_ad_api()
 
   def warn(self, message, *args):
@@ -135,12 +139,12 @@ class App(AppBase):
     self.mqtt = self.get_plugin_api(self.default_mqtt_namespace)
     self.add_triggers()
 
-  # def terminate(self):
-  #   for t in self.trigger_data:
-  #     if t['type'] == TRIGGER_EVENT:
-  #       self.hass.cancel_listen_event(t['handle'])
-  #     elif t['type'] == TRIGGER_MQTT:
-  #       self.mqtt.cancel_listen_event(t['handle'])
+  def terminate(self):
+    for t in self.trigger_data:
+      if t['type'] == TRIGGER_EVENT:
+        self.hass.cancel_listen_event(t['handle'])
+      elif t['type'] == TRIGGER_MQTT:
+        self.mqtt.cancel_listen_event(t['handle'])
 
   def add_triggers(self, triggers = []):
     if not triggers: triggers = self.args.get('triggers')
