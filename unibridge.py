@@ -91,6 +91,11 @@ class MqttApp(AppBase):
     self.mqtt = self.get_plugin_api(self.args.get('mqtt_namespace','mqtt'))
     self.debug("Triggers {}", self.args.get('triggers'))
     self.add_triggers()
+  
+  def terminate(self):
+    for t in self.triggers:
+      if t.get('type') == TRIGGER_TIMER:
+        return
 
   def add_triggers(self, triggers = []):
     if not triggers: triggers = self.args.get('triggers')
@@ -105,6 +110,7 @@ class MqttApp(AppBase):
 
   def add_time_trigger(self, trigger):
     t = {}
+    t['type'] = TRIGGER_TIMER
     interval = trigger.get('interval')
     if not interval:
       self.error("Unknown trigger {}", trigger)
