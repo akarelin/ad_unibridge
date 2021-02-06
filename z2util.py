@@ -20,7 +20,7 @@ class Z2Bridge(unibridge.MqttApp):
   bridge_base_topic = None
   util_base_topic = None
   disco_topics = []
-
+ 
 # region construc/destruct
   def initialize(self):
     super().initialize()
@@ -69,6 +69,10 @@ class Z2Bridge(unibridge.MqttApp):
       self.publish_disco4groups(unpublish = True)
     elif topic == '/poweron':
       self.publish_poweron()
+    elif topic == '/discover/self/do':
+      self.publish_disco4self()
+    elif topic == '/discover/self/undo':
+      self.publish_disco4self(unpublish = True)
 # endregion
 
   def poll(self):
@@ -156,6 +160,30 @@ class Z2Bridge(unibridge.MqttApp):
           self.mqtt.mqtt_publish(config_topic, json.dumps(p))
 # endregion
 
+# region self-discovery
+  def publish_disco4self(self, unpublish = False):
+    self.debug("Publishing self-discovery")
+    config_topic = "ha/2/disco/device_automation/z2/z2mqtt_util/config"
+    command_topic = "z2mqtt/util"
+    for command in ['poll','get','poweron']:
+      if unpublish:
+        self.mqtt.mqtt_publish(config_topic)
+      else:
+        p = {}
+        p['automation_type'] = 'trigger'
+        p['topic'] = f"{command_topic}/{command}"
+        p['subtype'] = command
+        p['type'] = 'execute'
+        d = {}
+        d['name'] = f"Z2 Util {command}"
+        d['via_device'] = "Z2 Util"
+        d['identifiers'] = [p['topic']]
+
+        p['device'] = d
+        
+        self.mqtt.mqtt_publish(config_topic, json.dumps(p))
+
+# endregion
   def available(self):
     if self.devices and self.groups and self.config:
       if self.state in ['online','offline']:
