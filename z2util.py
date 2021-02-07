@@ -20,7 +20,7 @@ class Z2Bridge(unibridge.MqttApp):
   bridge_base_topic = None
   util_base_topic = None
   disco_topics = []
- 
+
 # region construc/destruct
   def initialize(self):
     super().initialize()

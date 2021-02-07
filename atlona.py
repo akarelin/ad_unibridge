@@ -21,6 +21,7 @@ INPUTS = {
 }
 
 class Atlona(unibridge.MqttApp):
+  address = None
   inputs = []
   outputs = {"HDMI": None, "HDBT": None}
   devices = []
@@ -29,6 +30,7 @@ class Atlona(unibridge.MqttApp):
 
   def initialize(self):
     super().initialize()
+    self.address = self.args.get('address')
     self.refresh()
     
     self.mqtt.mqtt_subscribe('atlona/output/+/set')
@@ -132,7 +134,7 @@ class Atlona(unibridge.MqttApp):
 
 # region Telnet
   def _start(self):
-    self.tn = telnetlib.Telnet('10.172.2.81')
+    self.tn = telnetlib.Telnet(self.address)
     a = self.tn.read_until(b"\n\n", 3)
     self.tn.write(b"OutputMode h\n")
     a = self.tn.read_until(b"#\n", 3)
