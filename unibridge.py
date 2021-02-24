@@ -4,6 +4,7 @@ import adbase as ad
 import adapi as adapi
 from abc import ABC, abstractmethod
 import logging
+import json
 
 from datetime import datetime, time
 
@@ -236,3 +237,62 @@ class App(AppBase):
       payload['new'] = new
       self.trigger(payload)
 # endregion      
+
+# region Constants
+OFF = 'OFF'
+ON = 'ON'
+# endregion
+
+# region MqttDevice
+class MqttDevice(MqttApp):
+  state = OFF
+  brightness = None
+
+  topic_base = None
+
+  topic_cmd_switch = None
+  topic_cmd_brightness = None
+
+  topic_state = None
+
+#  topic_state_switch = None
+#  topic_state_brightness = None
+  
+  def initialize(self):
+    super().initialize()
+    self.topic_base = self.args.get('topic')
+    self.topic_cmd_switch = '/'.join([self.topic_base, "switch"])
+    self.topic_state = '/'.join([self.topic_base, "state"])
+
+    self.mqtt.mqtt_unsubscribe(self.topic_cmd_switch)
+    self.mqtt.listen_event(self.c_mqtt_cmd_switch, "MQTT_MESSAGE", topic = self.topic_cmd_switch)
+    self.mqtt.mqtt_subscribe(self.topic_cmd_switch)
+  
+  def terminate(self):
+    super().terminate()
+
+  def publish_state(self):
+    s = {}
+    s['state'] = self.state
+    if self.state == ON:
+      s['brightness'] = self.brightness
+    self.mqtt.mqtt_publish(self.topic_state, json.dumps(s))
+
+  @abstractmethod
+  def _set(self):
+    raise NotImplementedError  
+  
+  @abstractmethod
+  def _get(self):
+    raise NotImplementedError  
+
+  def c_mqtt_cmd_switch(self, event_name, data, kwargs):
+    payload = data.get('payload')
+    if payload == ON:
+      self.state = ON
+      if not self.brightness: self.brightness = 127
+    if payload == OFF:
+      self.state = OFF
+    self._set()
+    self.publish_state()
+# endregion
