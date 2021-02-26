@@ -14,10 +14,10 @@ atlona:
 
 INPUTS = {
 #    'USB-C': 'USB-C',
-    "DisplayPort":  "AlexPC",
+    "DisplayPort":  "PC",
     "HDMI 3": "CCTV",
     "HDMI 4": "NVR",
-#    'BYOD': 'BYOD'
+    "BYOD": "BYOD"
 }
 
 class Atlona(unibridge.MqttApp):
@@ -82,13 +82,16 @@ class Atlona(unibridge.MqttApp):
     self.refresh()
 
   def set_output(self, output, device):
-    out_index = int(output)
-    if out_index not in [0,1]:
-      self.error("Invalud output {}", output)
+    if output in [0,'HDMI']:
+      out_index = 0
+    elif output in [1,'HDBT']:
+      out_index = 1
+    else:
+      self.error("Invalid output {}", output)
       return
     
     if device not in self.devices:
-      self.error("Invalud device {}", device)
+      self.error("Invalid device {}", device)
     dev_index = self.all_devices.index(device)
 
     cmd = f"Display:Matrix:Set {dev_index} {out_index}"
