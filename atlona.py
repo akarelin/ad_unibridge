@@ -12,16 +12,9 @@ atlona:
   base_topic: atlona
 """
 
-INPUTS = {
-#    'USB-C': 'USB-C',
-    "DisplayPort":  "PC",
-    "HDMI 3": "CCTV",
-    "HDMI 4": "NVR",
-    "BYOD": "BYOD"
-}
-
 class Atlona(unibridge.MqttApp):
   address = None
+  input_names = {}
   inputs = []
   outputs = {"HDMI": None, "HDBT": None}
   devices = []
@@ -31,6 +24,7 @@ class Atlona(unibridge.MqttApp):
   def initialize(self):
     super().initialize()
     self.address = self.args.get('address')
+    self.input_names = self.args.get('input_names')
     self.refresh()
     
     self.mqtt.mqtt_subscribe('atlona/output/+/set')
@@ -121,12 +115,9 @@ class Atlona(unibridge.MqttApp):
       name, state = v.split(': ')
       i['name'] = name
       i['state'] = bool(state)
-#      self.debug("INPUTS {} {} {}",INPUTS, name, INPUTS.get(name))
 
-      i['device'] = INPUTS.get(name)
-#      self.debug("\n{}", i)
+      i['device'] = self.input_names.get(name)
       self.inputs.append(i)
-#    self.debug("Inputs: {}", self.inputs)
   def send_command(self, cmd, timeout = 30):
     self._start()
     result = self._cmd(cmd, timeout = timeout)

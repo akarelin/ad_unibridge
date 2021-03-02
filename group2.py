@@ -21,23 +21,19 @@ colorloop:
 """
 
 # region Constants
-Z2 = 'z2'
-LIGHT = 'light'
+TYPE_Z2 = 'z2'
+TYPE_LIGHT = 'light'
 
 OFF = 'OFF'
 ON = 'ON'
 # endregion
-
-
-# class static(unibridge.App):
-#   def initialize(self):
-#     super().initialize()
 
 class dynamic(unibridge.MqttDevice):
   members = []
 
   def initialize(self):
     super().initialize()
+#    self.hass = self.get_plugin_api('deuce')
 
     self._init_members()
     self.debug("Members {}",self.members)
@@ -59,61 +55,79 @@ class dynamic(unibridge.MqttDevice):
       else:
         name = m
 
-      self.debug("i {} m {} prefix {}",i,m,prefix)
-      if prefix == 'Z2':
-        member['type'] = MQTT_Z2
+ #     self.debug("i {} m {} prefix {}",i,m,prefix)
+      if prefix in ['Z2','z2','mqtt']:
+        member['type'] = TYPE_Z2
         member['name'] = name
-        member['topic'] = '/'.join(["z2mqtt",m,"set"])
-      elif prefix in ['2','7','av']:
-        member['type'] = HASS_LIGHT
+        member['topic'] = '/'.join(["z2mqtt",name,"set"])
+      elif prefix in ['2','7','av','deuce','seven']:
+        member['type'] = TYPE_LIGHT
         member['namespace'] = prefix
         member['name'] = name
+        member['entity_id'] = "light."+name
+
       member['angle'] = float(i*360/member_count)
-      self.debug("Member {}",member)
+#      self.debug("Member {}",member)
       self.members.append(member)
 
+# region _set_group
   def _set(self):
     now = datetime.datetime.now()
     angle_offset = now.minute*6
-    self.debug("Updating members {}",self.members)
+#    self.debug("Updating members {}",self.members)
 
     for m in self.members:
       if self.state == 'ON':
         angle = (angle_offset + m['angle'])%360
-        self._set_z2(m['topic'], ON, self.brightness, angle)
+        self._set_member(m, ON, brightness = self.brightness, hue = angle)
       if self.state == 'OFF':
-        self._set_z2(m['topic'], OFF)
+        self._set_member(m, OFF)
     self.publish_state()
+    
 
-  def _set_z2(self, topic, cmd, brightness = 127, hue = None, saturation = 100):
-    payload = {}
-    
-    if cmd == ON:
-      payload['state'] = 'ON'
-      payload['brightness'] = brightness
-      if hue:
-        payload['color'] = {"hue": hue, "saturation": saturation}
-    elif cmd == OFF: payload['state'] = 'OFF'
-    else: self.error("Unknown command {}", cmd)
-    
-#    self.debug("\n\tTopic {}\n\tPayload {}", topic, json.dumps(payload))
-    self.mqtt.mqtt_publish(topic, json.dumps(payload))
-    
-  def _set_hassio(self, entity, cmd, namespace = None, brightness = 127, hue = None, saturation = 100):
-    service = None
-    call = {}
-    call["namespace"] = namespace
-    call["entity_id	"] = entity
+# endregion    
 
-    if cmd == ON:
-      service = "ligh.turn_on"
-      call["brightness"] = brightness
-      if hue:
-        call["hs_color"] = [hue, saturation]
-    elif cmd == OFF: 
-      service = "ligh.turn_off"
-    self.api.call_service(service, call)
+# region _set_member
+  def _set_member(self, member, cmd, brightness = 127, hue = None, saturation = 100):
+    t = member['type']
+# region Z2
+    if t == TYPE_Z2:
+      payload = {}
+      topic = member['topic']
+      if cmd == ON:
+        payload['state'] = 'ON'
+        payload['brightness'] = brightness
+        if hue:
+          payload['color'] = {"hue": hue, "saturation": saturation}
+      elif cmd == OFF: payload['state'] = 'OFF'
+      else: self.error("Unknown command {}", cmd)
+      self.mqtt.mqtt_publish(topic, json.dumps(payload))
+# endregion
+# region LIGHT   
+    elif t == TYPE_LIGHT:
+      e = None
+      e = member['entity_id']
+      namespace = member.get('namespace')
+      if cmd == ON:
+        self.api.call_service("light/turn_on", entity_id = e, namespace = namespace, brightness = brightness, hs_color = [hue, saturation] if hue else None)
+      elif cmd == OFF:
+        self.api.call_service("light/turn_off", entity_id = e, namespace = namespace)
 
-    
+
+      # if cmd == ON and hue:
+      #   self.turn_on(e, brightness = brightness, hue = hue, saturation = saturation, namespace = member.get('namespace'))
+      # elif cmd == ON and not hue:
+      #   self.hass.turn_on(e, brightness = brightness, namespace = member.get('namespace'))
+#        call = {}
+#        call["brightness"] = brightness
+#        if hue:
+#          call["hs_color"] = [hue, saturation]
+        # else:
+        #   self.hass.turn_on(e, brightness = brightness, namespace = member.get('namespace'))
+      # elif cmd == OFF: 
+      #   self.hass.turn_off(e, namespace = member.get('namespace'))
+# endregion
+# endregion
+
   def trigger(self, kwargs):
     self._set()
