@@ -70,6 +70,9 @@ class AppBase(ad.ADBase):
 
   def debug(self, message, *args):
     self._log("DEBUG", LOG_PREFIX_STATUS, message, *args)
+  
+  def d(self, message):
+    self._log("DEBUG", LOG_PREFIX_STATUS, message)
 
   def _log(self, level, prefix, message, *args):
     l = level.upper()

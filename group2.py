@@ -21,8 +21,8 @@ colorloop:
 """
 
 # region Constants
-MQTT_Z2 = 'z2'
-HASS_LIGHT = 'light'
+Z2 = 'z2'
+LIGHT = 'light'
 
 OFF = 'OFF'
 ON = 'ON'
@@ -52,10 +52,24 @@ class dynamic(unibridge.MqttDevice):
     
     for i, m in enumerate(ms):
       member = {}
-      member['type'] = MQTT_Z2
-      member['name'] = m
-      member['topic'] = '/'.join(["z2mqtt",m,"set"])
+      prefix = None
+      name = None
+      if ':' in m:
+        prefix, name = m.split(':')
+      else:
+        name = m
+
+      self.debug("i {} m {} prefix {}",i,m,prefix)
+      if prefix == 'Z2':
+        member['type'] = MQTT_Z2
+        member['name'] = name
+        member['topic'] = '/'.join(["z2mqtt",m,"set"])
+      elif prefix in ['2','7','av']:
+        member['type'] = HASS_LIGHT
+        member['namespace'] = prefix
+        member['name'] = name
       member['angle'] = float(i*360/member_count)
+      self.debug("Member {}",member)
       self.members.append(member)
 
   def _set(self):
@@ -84,6 +98,22 @@ class dynamic(unibridge.MqttDevice):
     
 #    self.debug("\n\tTopic {}\n\tPayload {}", topic, json.dumps(payload))
     self.mqtt.mqtt_publish(topic, json.dumps(payload))
+    
+  def _set_hassio(self, entity, cmd, namespace = None, brightness = 127, hue = None, saturation = 100):
+    service = None
+    call = {}
+    call["namespace"] = namespace
+    call["entity_id	"] = entity
+
+    if cmd == ON:
+      service = "ligh.turn_on"
+      call["brightness"] = brightness
+      if hue:
+        call["hs_color"] = [hue, saturation]
+    elif cmd == OFF: 
+      service = "ligh.turn_off"
+    self.api.call_service(service, call)
+
     
   def trigger(self, kwargs):
     self._set()
