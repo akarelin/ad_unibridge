@@ -56,10 +56,11 @@ TRIGGER_TIMER = 'timer'
 class AppBase(ad.ADBase):
   api = None
   log = None
-  dlog = None
+  mqtt = None
+  hass = None
 
   def initialize(self):
-    logging.basicConfig(filename="ad_base", )
+#    logging.basicConfig(filename="ad_base", )
     self.api = self.get_ad_api()
 
   def warn(self, message, *args):
@@ -72,7 +73,8 @@ class AppBase(ad.ADBase):
     self._log("DEBUG", LOG_PREFIX_STATUS, message, *args)
   
   def d(self, message):
-    self._log("DEBUG", LOG_PREFIX_STATUS, message)
+    if not self.args.get("debug"): return
+    self.api.log(msg = message, level = "DEBUG", log = LOG_DEBUG)
 
   def _log(self, level, prefix, message, *args):
     l = level.upper()
@@ -87,12 +89,12 @@ class AppBase(ad.ADBase):
 
 # region MqttApp
 class MqttApp(AppBase):
-  mqtt = None
   triggers = []
   
   def initialize(self):
     super().initialize()
     self.mqtt = self.get_plugin_api(self.args.get('mqtt_namespace','mqtt'))
+    self.hass = self.get_plugin_api(self.args.get('default_namespace'))
     self.debug("Triggers {}", self.args.get('triggers'))
     self.add_triggers()
   
@@ -132,16 +134,10 @@ class MqttApp(AppBase):
 
 # region App
 class App(AppBase):
-  default_namespace = None
-  default_mqtt_namespace = None
-  hass = None
-  mqtt = None
   triggers = []
 
   def initialize(self):
     super().initialize()
-    self.default_namespace = self.args.get('default_namespace','default')
-    self.default_mqtt_namespace = self.args.get('default_mqtt_namespace','default_mqtt')
     self.hass = self.get_plugin_api(self.default_namespace)
 
     self.debug("Namespace {} hass {}", self.default_namespace, self.hass)    
@@ -179,19 +175,16 @@ class App(AppBase):
     trigger = {}
     trigger['event'] = data['event']
 
-#    self.debug("Trigger @ 121 {}", trigger)
     if not data.get('namespace'):
       if data['event'] == EVENT_MQTT: data['namespace'] = self.default_mqtt_namespace
       else: data['namespace'] = self.default_namespace
 
-#    self.debug("Data @ 125 {}", data)
     if data['event'] == EVENT_MQTT:
       trigger['type'] = TRIGGER_MQTT
       trigger['handle'] = self.mqtt.listen_event(self._event_callback, **data)
     else:
       trigger['type'] = TRIGGER_EVENT
       trigger['handle'] = self.hass.listen_event(self._event_callback, **data)
-#      trigger['handle'] = self.api.listen_event(self._event_callback, **data)
 
     if trigger['handle']: self.triggers.append(trigger)
     else: self.error("Trigger no bueno")
@@ -280,6 +273,19 @@ class MqttDevice(MqttApp):
     if self.state == ON:
       s['brightness'] = self.brightness
     self.mqtt.mqtt_publish(self.topic_state, json.dumps(s))
+
+    # if self.state == ON and self.brightness:
+    #   self.set_app_state(self.entity, {"state": self.state, "brightness": self.brightness})
+    # else:
+    #   self.set_app_state(self.entity, {"state": self.state})
+
+    # entity_id = self.args.get('entity_id')
+    # if self.api.entity_exists(entity_id, namespace = "ao"):
+    #   self.api.call_service("state/set", entity_id=entity_id, state=self.state.lower(), brightness = self.brightness, namespace = 'ao')
+    # else:
+    #   self.api.call_service("state/add_entity", entity_id=entity_id, state=self.state.lower(), brightness = self.brightness, namespace = 'ao')
+
+
 
   @abstractmethod
   def _set(self):
