@@ -45,8 +45,8 @@ class Atlona(unibridge.MqttApp):
   def query(self):
     self._start()
     self.get_input_states()
-    self.outputs['HDMI'] = self.inputs[self.get_input(0)].get('device')
-    self.outputs['HDBT'] = self.inputs[self.get_input(1)].get('device')
+    self.outputs['HDMI'] = self.inputs[self.get_input(1)].get('device')
+    self.outputs['HDBT'] = self.inputs[self.get_input(0)].get('device')
     self.devices = []
     for i in self.inputs:
       d = i.get('device')
@@ -76,10 +76,10 @@ class Atlona(unibridge.MqttApp):
     self.refresh()
 
   def set_output(self, output, device):
-    if output in [0,'HDMI']:
-      out_index = 0
-    elif output in [1,'HDBT']:
+    if output in [1,'HDMI']:
       out_index = 1
+    elif output in [0,'HDBT']:
+      out_index = 0
     else:
       self.error("Invalid output {}", output)
       return
