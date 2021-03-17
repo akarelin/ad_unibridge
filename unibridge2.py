@@ -45,12 +45,13 @@ T_TIMER = 'timer'
 # endregion
 
 # region AppBase
-class AppBase(ad.ADBase):
+class Environment(ad.ADBase):
 # region Defaults and Constructor  
   api = None
   mqtt = None
   hass = None
   default_namespace = None
+  mqtt_namespace = None
 
   log_main = LOG_DEFAULT_MAIN
   log_debug = LOG_DEFAULT_DEBUG
@@ -60,7 +61,13 @@ class AppBase(ad.ADBase):
     self.api = self.get_ad_api()
     self.default_namespace = self.args.get('default_namespace')
     if self.default_namespace:
-      self.hass = self.api.get_ad_api()
+      self.hass = self.get_plugin_api(self.default_namespace)
+      self._d(f"Hass plugin for {self.default_namespace} initialized as {self.hass}")
+    self.mqtt_namespace = self.args.get('mqtt_namespace')
+    if self.mqtt_namespace:
+      self.mqtt = self.get_plugin_api(self.mqtt_namespace)
+      self._d(f"MQTT plugin for {self.mqtt_namespace} initialized as {self.mqtt}")
+      
 # endregion    
 
 # region Logging for components
@@ -100,6 +107,14 @@ class AppBase(ad.ADBase):
     self.api.log(msg = msg, log = LOG_UNIBRIDGE)
 # endregion
 
+# region Organizm
+  class Organizm(Environment):
+    def initialize(self):
+      super().initialize()
+      self._l(f"Organizm initialized self.")
+# endregion
+
+# endregion
 # # region MqttApp
 # class MqttApp(AppBase):
 #   triggers = []
