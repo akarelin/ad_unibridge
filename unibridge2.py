@@ -1,7 +1,11 @@
-import hassapi as hass
-import mqttapi as mqtt
-import adbase as ad
-import adapi as adapi
+#import hassapi as hass
+import appdaemon.plugins.hass.hassapi as hass
+#import mqttapi as mqtt
+import appdaemon.plugins.mqtt.mqttapi as mqtt
+#import adbase as ad
+import appdaemon.adbase as ad
+#import adapi as adapi
+import appdaemon.adapi as adapi
 from abc import ABC, abstractmethod
 import logging
 import json
@@ -37,7 +41,6 @@ LOG_UNIBRIDGE_DEBUG = 'unibridge_debug'
 LOG_UNIBRIDGE = 'unibridge'
 LOG_LINE_LENGTH = 80
 
-
 T_STATE = 'state'
 T_MQTT = 'mqtt'
 T_EVENT = 'event'
@@ -48,32 +51,30 @@ T_TIMER = 'timer'
 class Environment(ad.ADBase):
 # region Defaults and Constructor  
   api = None
+  log_main = LOG_DEFAULT_MAIN
+  log_debug = LOG_DEFAULT_DEBUG
+  log_error = LOG_DEFAULT_ERROR
+
   mqtt = None
   hass = None
   default_namespace = None
   mqtt_namespace = None
 
-  log_main = LOG_DEFAULT_MAIN
-  log_debug = LOG_DEFAULT_DEBUG
-  log_error = LOG_DEFAULT_ERROR
-
   def initialize(self):
     self.log_main = LOG_DEFAULT_MAIN
     self.log_debug = LOG_DEFAULT_DEBUG
     self.log_error = LOG_DEFAULT_ERROR
-
     self.api = self.get_ad_api()
+
     self.default_namespace = self.args.get('default_namespace')
+    self.mqtt_namespace = self.args.get('mqtt_namespace')
+
     if self.default_namespace:
       self.hass = self.get_plugin_api(self.default_namespace)
       self._d(f"Hass plugin for {self.default_namespace} initialized as {self.hass}")
-    self.mqtt_namespace = self.args.get('mqtt_namespace')
     if self.mqtt_namespace:
       self.mqtt = self.get_plugin_api(self.mqtt_namespace)
       self._d(f"MQTT plugin for {self.mqtt_namespace} initialized as {self.mqtt}")
-      
-# endregion    
-
 # region Logging for components
   def warn(self, msg):
     self.__log("WARNING", LOG_PREFIX_WARNING, msg)
@@ -84,7 +85,7 @@ class Environment(ad.ADBase):
 
   def __log(self, level, prefix, msg):
     l = level.upper()
-    if l == 'DEBUG' and not self.args.get("debug"): return
+    if l == 'DEBUG' and not self.debug: return
     if l == 'DEBUG':
       log = self.log_debug
       l = "INFO"
@@ -100,18 +101,21 @@ class Environment(ad.ADBase):
 # endregion
 # region internal loggin
   def _d(self, msg):
-    if not self.args.get("debug"): return
+    if not self.debut: return
     self.api.log(msg = msg, level = "DEBUG", log = LOG_UNIBRIDGE_DEBUG)
 
   def _l(self, msg):
     self.api.log(msg = msg, log = LOG_UNIBRIDGE)
 # endregion
 
+# endregion    
+
 # region Organizm
 class Organizm(Environment):
   def initialize(self):
     super().initialize()
     self._l(f"Organizm initialized self.")
+    self.debug(f"Organizm initialized")
 # endregion
 
 # endregion

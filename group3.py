@@ -1,6 +1,8 @@
 import unibridge2
 import json
 import datetime
+import pprint
+import math
 
 # region Ideas
 """
@@ -113,6 +115,117 @@ TODS = ['d', 'e', 'n', 's']
 STATES = ['on', 'motion', 'off']
 # endregion
 
+# region member
+class entity:
+  __states = None
+  __entity = None
+  __namespace = None
+  __name = None
+  __domain = None
+  __tods = {}
+  __e = None
+  __h = None
+
+# region constructor
+  def __init__(self, d, env: unibridge2.Environment):
+    member = {}
+    name = None
+    domain = None
+    entity = None
+    self.__e = env
+    namespace = d.get('namespace', self.__e.default_namespace)
+    self.__h = self.__e.get_plugin_api(namespace)
+    tods = {}
+    _entity_id = None
+    _entity_id = next(iter(d))
+    if not _entity_id:
+      self.__e.error(f"Device: {d} Error: Not an entity")
+      return
+    try:
+      domain, entity = _entity_id.split('.')
+    except:
+      self.__e.error(f"Error: Invalid entity {_entity_id} for device {d}")
+      return
+    name = d.get('name')
+    if not name:
+      self.__e.error(f"Error: No name for device {d}")
+      return
+    self.__e.debug(f"{name} @ {namespace} ==> {domain} ==> {entity}")
+    for t in TODS:
+      tods[t] = {}
+      states_raw = d.get(t, "50% none off")
+      states = []
+      states = states_raw.split()
+      for i,S in enumerate(STATES):
+        tods[t][S]=states[i]
+
+    self.__entity = entity
+    self.__namespace = namespace
+    self.__domain = domain
+    self.__name = name
+    self.__tods = tods
+# endregion
+  
+  @property
+  def tod(self):
+    time = self.__e.api.get_state(entity_id = 'sensor.time', namespace = 'deuce')
+    if time == 'Evening':
+      return 'e'
+    elif time == 'Night':
+      return 'n'
+    elif time == 'Sleep':
+      return 's'
+    else:
+      return 'd'
+
+  def tod_action(self, action):
+    a = self.__tods.get(self.tod).get(action)
+    self.debug(f"{self.__tods}")
+    self.debug(f"tod_action for {action} is {a}")
+    return a
+  @property
+  def current_state(self):
+    raw_state = self.__e.api.get_state(entity_id = self.entity_id, namespace = 'deuce', attribute = 'all')
+    state = {}
+    state['state'] = raw_state.get('state')
+    a = raw_state.get('attributes')
+    b = a.get('brightness')
+    if b:
+      brightness = math.ceil(b/2.55)
+      state['brightness'] = brightness
+    return state
+  @property
+  def entity_id(self):
+    return '.'.join([self.__domain, self.__entity])
+
+  def set_state(self, action = None):
+    current_tod = self.tod
+    current_state = self.current_state
+    to_state = self.desired_state(action)
+
+    self.debug(f"    Current tod: {current_tod}")
+    self.debug(f"    Current state: {current_state}")
+    self.debug(f"    Desired state: {to_state}")
+
+    if to_state == 'off':
+      self.__h.turn_off(self.entity_id)
+    elif '%' in to_state:
+      brightness = to_state.split('%')[0]
+      self.__h.turn_on('.'.join([self.__domain, self.__entity]), brightness_pct = brightness)
+
+  def debug(self, msg):
+    self.__e.debug(msg)
+  def error(self, msg):
+    self.__e.error(msg)
+
+  def desired_state(self, action = None):
+    tod_action = self.tod_action(action)
+    self.debug(f"Action: {action} TOD Action: {tod_action}")
+    return tod_action
+  def __str__(self):
+    return f"{self.__name} is {self.__domain}.{self.__entity} @ {self.__namespace}\n    tods {self.__tods}"
+# endregion
+
 class simpleton(unibridge2.Organizm):
 # region Example
   """
@@ -137,17 +250,27 @@ class simpleton(unibridge2.Organizm):
         namespace: deuce
         type: isy
   """
+
 # endregion
   name = None
   room = None
-  __members = []
-  __tods = {}
+  members = []
 
 # region Init/Construct
   def initialize(self):
     super().initialize()
-    self.debug(f"Starting initialize: {self.args}")
+#    self.debug(f"Starting initialize: {self.args}")
     self.__init_members()
+#    self.debug(f"Initialized: {self}")
+#    self.debug(f"Default namespace: {self.default_namespace}")
+#    tod=self.api.get_state(entity_id = 'sensor.time', namespace = 'deuce')
+#    self.debug(f"Current time {tod}")
+#    self.set_state('off')
+
+  def set_state(self, action):
+    self.debug(f"Setting state for {action}")
+    for m in self.members:
+      m.set_state(action)
 
   def __init_members(self):
     self.name = self.args.get('name')
@@ -159,42 +282,11 @@ class simpleton(unibridge2.Organizm):
     devices = self.args.get('devices')
     if devices:
       for d in devices:
-        member = {}
-        namespace = None
-        name = None
-        domain = None
-        entity = None
-        tods = {}
+        m = entity(d, env = self)
+        self.debug(f"Member: {m}")
+        self.members.append(m)
 
-        name = next(iter(d))
-        self.debug(f"Device: {d} Name: {name} Iter: {iter(d)}")
-        if not name:
-          self.error(f"Device: {d} Error: No name")
-          return
-        namespace = d.get('namespace',self.default_namespace)
-        entity_id = d.get('entity')
-        try:
-          domain, entity = entity_id.split('.')
-        except:
-          self.error(f"Device: {d} Error: Invalid entity {entity_id}")
-          return
-
-        member['name'] = name
-        member['domain'] = domain
-        member['namespace'] = namespace
-        member['entity'] = entity
-        
-        for t in TODS:
-          states_raw = d.get(t, "50%\tnone\toff")
-          states = []
-          states = states_raw.split("\t")
-          for i,s in enumerate(states):
-            tods[TODS[i]] = s
-
-        member['tods'] = tods
-        
-        self.debug(f"\tInit {self.room}.{self.name} => Adding member {member}")
-        self.debug(f"\t\tTODs => {tods}")
-        self.members.append(member)
-# endregion
-# endregion        
+  # def __str__(self):
+  #   return f"{self.room} -> {self.name} -> {self.members}"
+  # def __repr__(self):
+  #   return __str__(self)
