@@ -58,6 +58,10 @@ class Environment(ad.ADBase):
   log_error = LOG_DEFAULT_ERROR
 
   def initialize(self):
+    self.log_main = LOG_DEFAULT_MAIN
+    self.log_debug = LOG_DEFAULT_DEBUG
+    self.log_error = LOG_DEFAULT_ERROR
+
     self.api = self.get_ad_api()
     self.default_namespace = self.args.get('default_namespace')
     if self.default_namespace:
@@ -72,30 +76,26 @@ class Environment(ad.ADBase):
 
 # region Logging for components
   def warn(self, msg):
-    self._log("WARNING", LOG_PREFIX_WARNING, msg)
-
+    self.__log("WARNING", LOG_PREFIX_WARNING, msg)
   def error(self, msg):
-    self._log("ERROR", LOG_PREFIX_ALERT, msg)
-
+    self.__log("ERROR", LOG_PREFIX_ALERT, msg)
   def debug(self, msg):
-    self._log("DEBUG", LOG_PREFIX_STATUS, msg)
+    self.__log("DEBUG", LOG_PREFIX_STATUS, msg)
 
-  def _log(self, level, prefix, msg):
+  def __log(self, level, prefix, msg):
     l = level.upper()
     if l == 'DEBUG' and not self.args.get("debug"): return
     if l == 'DEBUG':
-      log = log_debug
+      log = self.log_debug
       l = "INFO"
     elif l in ['WARNING']:
-      log = log_main
+      log = self.log_main
       l = "WARNING"
     else:
-      log = log_error
+      log = self.log_error
       l = "ERROR"
-
     m = " ".join([prefix,msg])
     if len(m) > LOG_LINE_LENGTH: m += '\n'
-
     self.api.log(msg = m, level = l, log = log)
 # endregion
 # region internal loggin
@@ -108,10 +108,10 @@ class Environment(ad.ADBase):
 # endregion
 
 # region Organizm
-  class Organizm(Environment):
-    def initialize(self):
-      super().initialize()
-      self._l(f"Organizm initialized self.")
+class Organizm(Environment):
+  def initialize(self):
+    super().initialize()
+    self._l(f"Organizm initialized self.")
 # endregion
 
 # endregion

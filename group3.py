@@ -2,6 +2,7 @@ import unibridge2
 import json
 import datetime
 
+# region Ideas
 """
 ao_bathroom_ceiling:
   module: simpleton
@@ -104,7 +105,7 @@ ao_bathroom:
   indicators:
     - switch.ind_ao_bathroom_anyon
 """
-
+# endregion
 # region Constants
 OFF = 'OFF'
 ON = 'ON'
@@ -114,28 +115,28 @@ STATES = ['on', 'motion', 'off']
 
 class simpleton(unibridge2.Organizm):
 # region Example
-"""
-ao_bathroom_ceiling:
-  module: simpleton
-  name: ceiling
-  room: ao_bathroom
+  """
+  ao_bathroom_ceiling:
+    module: simpleton
+    name: ceiling
+    room: ao_bathroom
 
-  devices:
-    - light.ao_bathroom_ceiling:
-      name: ceiling
-      namespace: deuce
-      # triplets of on, motion, off
-      d:  75%   50%   off
-      e:  50%   33%   off
-      n:  50%   33%   off
-      s:  50%   none  off
-  interlock:
-    - light.dimmer_ao_bathroom_ceiling:
+    devices:
+      - light.ao_bathroom_ceiling:
+        name: ceiling
+        namespace: deuce
+        # triplets of on, motion, off
+        d:  75%   50%   off
+        e:  50%   33%   off
+        n:  50%   33%   off
+        s:  50%   none  off
+    interlock:
+      - light.dimmer_ao_bathroom_ceiling:
         entity: light.dimmer_ao_bathroom_ceiling
         name: dimmer
         namespace: deuce
         type: isy
-"""
+  """
 # endregion
   name = None
   room = None
@@ -145,11 +146,12 @@ ao_bathroom_ceiling:
 # region Init/Construct
   def initialize(self):
     super().initialize()
+    self.debug(f"Starting initialize: {self.args}")
     self.__init_members()
 
   def __init_members(self):
     self.name = self.args.get('name')
-    if not name:
+    if not self.name:
       self.error("No members!")
       return
     self.room = self.args.get('room')
@@ -164,12 +166,13 @@ ao_bathroom_ceiling:
         entity = None
         tods = {}
 
-        name = l.get('name')
+        name = next(iter(d))
+        self.debug(f"Device: {d} Name: {name} Iter: {iter(d)}")
         if not name:
           self.error(f"Device: {d} Error: No name")
           return
-        namespace = l.get('namespace',self.default_namespace)
-        entity_id = l.get('entity')
+        namespace = d.get('namespace',self.default_namespace)
+        entity_id = d.get('entity')
         try:
           domain, entity = entity_id.split('.')
         except:
