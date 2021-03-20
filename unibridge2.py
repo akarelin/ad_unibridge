@@ -112,10 +112,29 @@ class Environment(ad.ADBase):
 
 # region Organizm
 class Organizm(Environment):
+  __hard_refresh_interval = 1*60*60
+  __refresh_interval = 1*60
+  timers = []
+ 
   def initialize(self):
     super().initialize()
     self._l(f"Organizm initialized self.")
     self.debug(f"Organizm initialized")
+  def __initialize(self):
+    self.api.run_every(self.__c_hard_refresh, "now+30", __hard_refresh_interval)
+    self.api.run_every(self.__c_refresh, "now+1", __refresh_interval)
+  def __c_hard_refresh(self, kwargs):
+    self.refresh_hard()
+  def __c_refresh(self, kwargs):
+    self.refresh()
+
+  def refresh_hard(self):
+    self.refresh()
+  @abstractmethod
+  def refresh(self):
+    raise NotImplementedError
+
+
 # endregion
 
 # endregion
