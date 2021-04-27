@@ -1,4 +1,4 @@
-import unibridge
+import mqtt_device as MqttDevice
 import json
 import datetime
 
@@ -28,12 +28,11 @@ OFF = 'OFF'
 ON = 'ON'
 # endregion
 
-class dynamic(unibridge.MqttDevice):
+class dynamic(MqttDevice):
   members = []
 
   def initialize(self):
     super().initialize()
-#    self.hass = self.get_plugin_api('deuce')
 
     self._init_members()
     self.debug("Members {}",self.members)
@@ -55,26 +54,24 @@ class dynamic(unibridge.MqttDevice):
       else:
         name = m
 
- #     self.debug("i {} m {} prefix {}",i,m,prefix)
-      if prefix in ['Z2','z2','mqtt']:
-        member['type'] = TYPE_Z2
-        member['name'] = name
-        member['topic'] = '/'.join(["z2mqtt",name,"set"])
-      elif prefix in ['2','7','av','deuce','seven']:
+      if prefix in ['2','7','av','deuce','seven']:
         member['type'] = TYPE_LIGHT
         member['namespace'] = prefix
         member['name'] = name
         member['entity_id'] = "light."+name
+      else:
+        member['type'] = TYPE_Z2
+        member['name'] = name
+        if prefix not in ['Z2','z2','mqtt']: self.warn(f"Unknown type {m}")
+        member['topic'] = '/'.join(["z2mqtt",name,"set"])
 
       member['angle'] = float(i*360/member_count)
-#      self.debug("Member {}",member)
       self.members.append(member)
 
 # region _set_group
   def _set(self):
     now = datetime.datetime.now()
     angle_offset = now.minute*6
-#    self.debug("Updating members {}",self.members)
 
     for m in self.members:
       if self.state == 'ON':
@@ -83,13 +80,15 @@ class dynamic(unibridge.MqttDevice):
       if self.state == 'OFF':
         self._set_member(m, OFF)
     self.publish_state()
-    
-
 # endregion    
 
 # region _set_member
   def _set_member(self, member, cmd, brightness = 127, hue = None, saturation = 100):
-    t = member['type']
+    try:
+      t = member['type']
+    except:
+      self.error(f"Unknown member {member}")
+      return
 # region Z2
     if t == TYPE_Z2:
       payload = {}
@@ -111,7 +110,8 @@ class dynamic(unibridge.MqttDevice):
       if cmd == ON:
         self.api.call_service("light/turn_on", entity_id = e, namespace = namespace, brightness = brightness, hs_color = [hue, saturation] if hue else None)
       elif cmd == OFF:
-        self.api.call_service("light/turn_off", entity_id = e, namespace = namespace)
+        if self.get_state(e, namespace = namespace) != 'off':
+          self.api.call_service("light/turn_off", entity_id = e, namespace = namespace)
 
 
       # if cmd == ON and hue:
@@ -129,5 +129,3 @@ class dynamic(unibridge.MqttDevice):
 # endregion
 # endregion
 
-  def trigger(self, kwargs):
-    self._set()
