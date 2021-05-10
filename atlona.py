@@ -175,8 +175,10 @@ class AVAccess(unibridge.MqttApp):
     self.debug(f"AVAccess matrix initialized\n    {self.address}  {self.prefix}\n    {self.inputs}\n    {self.outputs}\n")
     self.refresh()
     
+    self.debug(f"  +-- Subscribing to control events")
     self.mqtt.mqtt_subscribe(f"{self.prefix}/output/+/set")
     self.mqtt.listen_event(self._mqtt_callback, "MQTT_MESSAGE", wildcard = f"{self.prefix}/output/#")
+    self.debug(f"  +-- Initialization Completed")
 
   # region SETs
   def _mqtt_callback(self, event_name, data, kwargs):
@@ -184,7 +186,7 @@ class AVAccess(unibridge.MqttApp):
     payload = data.get('payload')
     output = topic.split('/')[2]
     device = payload
-    self.debug(f"Callback {output} {device}")
+    self.debug(f" *** Callback {output} {device}")
     self.set_output(output, device)
 
   def trigger(self, kwargs):
