@@ -95,41 +95,41 @@ class MqttApp(AppBase):
     super().initialize()
     self.mqtt = self.get_plugin_api(self.args.get('mqtt_namespace','mqtt'))
     self.hass = self.get_plugin_api(self.args.get('default_namespace'))
-    self.debug(f"Triggers {self.args.get('triggers')}")
-#    self.add_triggers()
+    self.debug("Triggers {}", self.args.get('triggers'))
+    self.add_triggers()
   
   def terminate(self):
     for t in self.triggers:
       if t.get('type') == TRIGGER_TIMER:
         return
 
-  # def add_triggers(self, triggers = []):
-  #   if not triggers: triggers = self.args.get('triggers')
-  #   if not triggers: return
+  def add_triggers(self, triggers = []):
+    if not triggers: triggers = self.args.get('triggers')
+    if not triggers: return
    
-  #   self.debug("Triggers {}", triggers)
-  #   for t in triggers:
-  #     if t['type'] == TRIGGER_TIMER: self.add_time_trigger(t)
-  #     else:
-  #       self.error("Invalid trigger type {}", t)
-  #       continue
+    self.debug("Triggers {}", triggers)
+    for t in triggers:
+      if t['type'] == TRIGGER_TIMER: self.add_time_trigger(t)
+      else:
+        self.error("Invalid trigger type {}", t)
+        continue
 
-  # def add_time_trigger(self, trigger):
-  #   t = {}
-  #   t['type'] = TRIGGER_TIMER
-  #   interval = trigger.get('interval')
-  #   if not interval:
-  #     self.error("Unknown trigger {}", trigger)
-  #     return
-  #   t['interval'] = interval
-  #   start = trigger.get('start',"now")
-  #   t['start'] = start
-  #   t['handle'] = self.api.run_every(self.trigger, start, interval)
-  #   self.triggers.append(t)
+  def add_time_trigger(self, trigger):
+    t = {}
+    t['type'] = TRIGGER_TIMER
+    interval = trigger.get('interval')
+    if not interval:
+      self.error("Unknown trigger {}", trigger)
+      return
+    t['interval'] = interval
+    start = trigger.get('start',"now")
+    t['start'] = start
+    t['handle'] = self.api.run_every(self.trigger, start, interval)
+    self.triggers.append(t)
 
-  # @abstractmethod
-  # def trigger(self, payload):
-  #   raise NotImplementedError
+  @abstractmethod
+  def trigger(self, payload):
+    raise NotImplementedError
 # endregion
 
 # region App
@@ -221,6 +221,7 @@ class App(AppBase):
       if event == EVENT_MQTT: payload = data.get('payload')
       else: payload = data
       if payload: self.trigger(payload)
+  
   def _state_callback(self, entity, attribute, old, new, kwargs):
     for t in self.triggers:
       if t['entity'] != entity: continue
