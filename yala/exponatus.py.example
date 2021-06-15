@@ -1,0 +1,95 @@
+import json
+from appdaemon.adbase import ADBase
+import voluptuous as vol
+#from constants import APP_MIN_SCHEMA
+import homeassistant
+
+# EXPONATUS_SCHEMA = APP_MIN_SCHEMA.extend(
+#     {
+#         vol.Required("name"): str,
+#         vol.Required("room"): str,
+#         vol.Required("devices"): LIST,
+#         vol.Required("unique_id"): str,
+#     }
+# )
+
+LIGHT = 'light'
+SWITCH = 'switch'
+
+class Exponatus(Simpleton):
+  def initialize(self, domain: str):
+    super().initialize()
+
+#    self.args = APP_SCHEMA(self.args)
+#    self.hass = self.get_plugin_api("HASS")
+#    self.mqtt = self.get_plugin_api("MQTT")
+#    self.light = self.args["light"]
+#    self.switch = self.args["switch"]
+#    entity = str.lower(str.replace(self.args["name"], " ", "_"))
+
+    self.topic = f"homeassistant/light/{entity}"
+
+    self.hass.listen_state(self.switch2mqtt, self.switch)
+    self.hass.listen_state(self.light2mqtt, self.light, attribute="all")
+    self.mqtt.listen_event(self.set_state, topic=f"{self.topic}/set")
+    self.publish_light_configuration()
+
+  # def publish_light_configuration(self):
+  #   supported_features = self.hass.get_state(
+  #       self.light, attribute="supported_features"
+  #   )
+  #   effect_list = self.hass.get_state(self.light, attribute="effect_list")
+  #   binary_supported_features = format(supported_features, "08b")
+  #   config = {
+  #       "~": self.topic,
+  #       "name": self.args["name"],
+  #       "uniq_id": self.args["unique_id"],
+  #       "cmd_t": "~/set",
+  #       "stat_t": "~/state",
+  #       "schema": "json",
+  #       "brightness": binary_supported_features[7] == "1",
+  #       "color_temp": binary_supported_features[6] == "1",
+  #       "effect": binary_supported_features[5] == "1",
+  #       "hs": binary_supported_features[3] == "1",
+  #       "white_value": binary_supported_features[0] == "1",
+  #       "effect_list": effect_list,
+  #       "ret": True,
+  #   }
+  #   self.mqtt.mqtt_publish(f"{self.topic}/config", payload=json.dumps(config))
+
+  def switch2mqtt(self, entity, attribute, old, new, kwargs):
+    payload = {"state": str.upper(new)}
+    self.publish_state(payload)
+
+  def light2mqtt(self, entity, attribute, old, new, kwargs):
+    new_attrs = new["attributes"]
+    attrs = ["brightness", "color_temp", "white_value"]
+    payload = {attr: new_attrs[attr] for attr in attrs if attr in new_attrs}
+    payload["state"] = new["state"].upper()
+    if "hs_color" in new_attrs:
+        payload["color"] = {
+            "h": new_attrs["hs_color"][0],
+            "s": new_attrs["hs_color"][1],
+        }
+    self.publish_state(payload)
+
+  def set_state(self, event_name, data, kwargs):
+    if "payload" not in data:
+        return
+    payload = json.loads(data["payload"])
+    if payload.get("state") == "ON":
+        attrs = ["brightness", "color_temp", "white_value", "effect"]
+        attributes = {attr: payload[attr] for attr in attrs if attr in payload}
+        if "color" in payload:
+            attributes["hs_color"] = [payload["color"]["h"], payload["color"]["s"]]
+
+        self.hass.turn_on(self.switch)
+        self.hass.turn_on(self.light, **attributes)
+
+    elif payload.get("state") == "OFF":
+        self.hass.turn_off(self.switch)
+
+    self.publish_state(payload)
+
+  def publish_state(self, payload):
+      self.mqtt.mqtt_publish(f"{self.topic}/state", payload=json.dumps(payload))
