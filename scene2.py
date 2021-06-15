@@ -3,8 +3,8 @@ import datetime
 
 """
 247:
-  module: scene
-  class: scene
+  module: scene2
+  class: scene2
 
   triggers:
     - type: event
@@ -48,14 +48,12 @@ import datetime
 ON = "turn_on"
 OFF = "turn_off"
 
-class scene(unibridge.App):
+class scene_collection(unibridge.App, area = None):
+  area = None
+  scenes = [{}]
+
   def initialize(self):
     super().initialize()
-    self.scene_list = []
-    self.scene_list = self.args['scenes']
-    self.scene = {}
-    self.off_scenes = []
-    self.debug("Secenes {}", self.scene_list)
 
     for scene_name in self.scene_list:
       self.scene[scene_name] = self.load_scene(scene_name)
