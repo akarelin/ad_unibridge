@@ -13,7 +13,6 @@ remapper i2 btn:
 """
 
 class Remapper(u3.U3Base):
-
   def initialize(self):
     super().initialize()
     self.debug(f"Initialized remapper {self.args}")
@@ -21,7 +20,7 @@ class Remapper(u3.U3Base):
   def _mqtt_callback(self, event_name, data, kwargs):
     topic = data.get('topic')
     payload = data.get('payload')
-    self.debug("Callback {} {}", output, device)
+    self.debug(f"Callback {topic} {payload}")
 
   def trigger(self, kwargs):
     pass

@@ -45,7 +45,7 @@ class U3Base(ad.ADBase):
 #      self.hass = self.hass.get_ad_api()
     self.mqtt = self.get_plugin_api(self.args.get('mqtt_namespace','mqtt'))
     self.hass = self.get_plugin_api(self.args.get('default_namespace'))
-#    self.debug(f"API Handles: {self.api} {self.mqtt} {self.hass}")
+    self.debug(f"API Handles: {self.api} {self.mqtt} {self.hass}")
     self.add_triggers()
     self._d(f"Triggers {self.triggers}")
 
@@ -90,6 +90,7 @@ class U3Base(ad.ADBase):
   def add_triggers(self, triggers = []):
     if not triggers: triggers = self.args.get('triggers')
     if not triggers: return
+    self._d(f"Adding triggers {triggers}")
    
     for t in triggers:
       self._d(f"Adding trigger {t}")
