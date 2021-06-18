@@ -16,8 +16,9 @@ LOG_DEFAULT = 'main_log'
 LOG_DEFAULT_MAIN = 'main_log'
 LOG_DEFAULT_ERROR = 'error_log'
 LOG_DEFAULT_DEBUG = 'debug_log'
-LOG_U3_DEBUG = 'u3_debug'
-LOG_U3 = 'u3'
+LOG_DEFAULT_TRACE = 'trace_log'
+LOG_U3_DEBUG = 'u3_debug_log'
+LOG_U3 = 'u3_log'
 LOG_LINE_LENGTH = 100
 
 T_STATE = 'state'
@@ -33,19 +34,16 @@ class U3Base(ad.ADBase):
   mqtt = None
   hass = None
   default_namespace = None
+  debug = False
   triggers = []
 
   def initialize(self):
+    self.debug = args.get('debug')
     self.api = self.get_ad_api()
     self.default_namespace = self.args.get('default_namespace')
-#    self.api.log(f"AD API Handle: {self.api}")
-#    self.debug(f"AD API Handle: {self.api}")
-
-#    if self.default_namespace:
-#      self.hass = self.hass.get_ad_api()
     self.mqtt = self.get_plugin_api(self.args.get('mqtt_namespace','mqtt'))
     self.hass = self.get_plugin_api(self.args.get('default_namespace'))
-    self.debug(f"API Handles: {self.api} {self.mqtt} {self.hass}")
+    self._d(f"API Handles: {self.api} {self.mqtt} {self.hass}")
     self.add_triggers()
     self._d(f"Triggers {self.triggers}")
 
@@ -53,47 +51,13 @@ class U3Base(ad.ADBase):
     for t in self.triggers: pass      
 
 # endregion    
-# region Logging
-  def warn(self, msg): self._log("WARNING", msg)
-  def error(self, msg): self._log("ERROR", msg)
-  def debug(self, msg): self._log("DEBUG", msg)
-
-  def _log(self, level, msg):
-    l = level.upper()
-    if l == 'DEBUG' and not self.args.get("debug"): return
-    if l == 'DEBUG':
-      log = LOG_DEFAULT_DEBUG
-      l = "INFO"
-    elif l in ['WARNING']:
-      log = LOG_DEFAULT
-      l = "WARNING"
-    else:
-      log = LOG_DEFAULT
-      l = "ERROR"
-    if len(msg) > LOG_LINE_LENGTH: msg += '\n'
-    self.api.log(msg = msg, level = l, log = log)
-  def _d(self, msg): 
-    if self.args.get("debug"): self.api.log(msg = msg, log = LOG_U3_DEBUG)
-  def _l(self, msg): 
-    self.api.log(msg = msg, log = LOG_U3)
-
-  def _trace(self, module, msg):
-    if not self.args.get("trace"): return
-    if module not in ['linter']: return
-    log = "trace_" + module
-    self.api.log(msg = msg, level = 'DEBUG', log = log)
-  
-  def trace(self, msg):
-    self._trace(module = self.__class__.__name__, msg = msg)
-# endregion
 # region Triggers
   def add_triggers(self, triggers = []):
     if not triggers: triggers = self.args.get('triggers')
     if not triggers: return
     self._d(f"Adding triggers {triggers}")
-   
     for t in triggers:
-      self._d(f"Adding trigger {t}")
+      self._d(f"    Adding trigger {t}")
       if t['type'] == T_MQTT: self.add_mqtt_trigger(t)
       elif t['type'] == T_EVENT: self.add_event_trigger(t)
       elif t['type'] == T_STATE: self.add_state_trigger(t)
@@ -117,11 +81,14 @@ class U3Base(ad.ADBase):
     t = {}
     t['type'] = T_EVENT
     t['namespace'] = data.get('namespace',self.default_namespace)
-    event = data.pop('event')
-    self._d(f"Adding event {event} trigger {data}")
-    t['handle'] = self.hass.listen_event(self._event_callback, event = event, **data)
-    if t['handle']: self.triggers.append(t)
-    else: self.error("Trigger no bueno")
+    event = data.get('event')
+    if event:
+      self._d(f"Adding event {event} trigger {data}")
+      t['handle'] = self.hass.listen_event(self._event_callback, event = event, **data)
+      if t['handle']: self.triggers.append(t)
+      else: self.error("Trigger no bueno")
+    else:
+      self.error("Event not specified for trigger")
 
   def add_mqtt_trigger(self, data):
     t = {}
@@ -130,17 +97,17 @@ class U3Base(ad.ADBase):
     self.mqtt.mqtt_subscribe(topic)
 
     c = {}
-#    c['event'] = 'MQTT_MESSAGE'
+    # c['event'] = 'MQTT_MESSAGE'
     if '#' in topic or '+' in topic: c['wildcard'] = topic
     elif topic: c['topic'] = topic
     self._d(f"MQTT Trigger {data} ==> {c}")
 
-### DEBUG
-#    t['handle'] = self.mqtt.listen_event(self._mqtt_callback, "MQTT_MESSAGE")
-#    if t['handle']: self.triggers.append(t)
+    ### DEBUG
+    #    t['handle'] = self.mqtt.listen_event(self._mqtt_callback, "MQTT_MESSAGE")
+    #    if t['handle']: self.triggers.append(t)
 
-# MQTT Event    
-#    t['handle'] = self.mqtt.listen_event(self._mqtt_callback, "MQTT_MESSAGE", c)
+    # MQTT Event    
+    #    t['handle'] = self.mqtt.listen_event(self._mqtt_callback, "MQTT_MESSAGE", c)
     t['handle'] = self.mqtt.listen_event(self._mqtt_callback, "MQTT_MESSAGE", wildcard = '#')
     self._d(f"Adding mqtt trigger {c} from {data}")
     if t['handle']: self.triggers.append(t)
@@ -151,22 +118,22 @@ class U3Base(ad.ADBase):
     if t['handle']: self.triggers.append(t)
     else: self.error("Trigger no bueno")
 
-# AD Event    
-    # t['handle'] = self.api.listen_event(self._event_callback, **c)
-    # self._d(f"Adding AD trigger {c} from {data}")
-    # if t['handle']: self.triggers.append(t)
-    # else: self.error("Trigger no bueno")
+    # AD Event    
+        # t['handle'] = self.api.listen_event(self._event_callback, **c)
+        # self._d(f"Adding AD trigger {c} from {data}")
+        # if t['handle']: self.triggers.append(t)
+        # else: self.error("Trigger no bueno")
 
   def add_state_trigger(self, data):
     raise NotImplementedError
 # endregion
 # region Internals
   def _mqtt_callback(self, event, data, kwargs):
-#    self._d(f"MQTT Callback. Event {event} Data {data} KWARGS {kwargs}")
+    #    self._d(f"MQTT Callback. Event {event} Data {data} KWARGS {kwargs}")
     if 'i1/kp' in data.get('topic'):
       self._d(f"Keypad detected {data.get('topic')}")
       self.Callback(T_MQTT, data)
-#    else: self._d(f"Not our topic {data.get('topic')}")
+    #    else: self._d(f"Not our topic {data.get('topic')}")
   def _event_callback(self, event, data, kwargs):
     data['event'] = event
     self._d(f"Event Callback. Event {event} Data {data} KWARGS {kwargs}")
@@ -178,7 +145,34 @@ class U3Base(ad.ADBase):
     raise NotImplementedError
 # endregion
 # endregion
+# region Logging
+  def Warn(self, msg): self._log("WARNING", msg)
+  def Error(self, msg): self._log("ERROR", msg)
+  def Debug(self, msg): self._log("DEBUG", msg)
 
+  def _log(self, level, msg):
+    l = level.upper()
+    if l not in ['DEBUG','INFO','ERROR','WARNING']: 
+      self._l(f"Invalid log level {l}")
+      return
+    if l == 'DEBUG' and not self.debug: return
+    log = LOG_DEFAULT_DEBUG if l == 'DEBUG' else LOG_DEFAULT
+    l = 'INFO' if l == 'DEBUG' else l
+    if len(msg) > LOG_LINE_LENGTH: msg += '\n'
+    self.api.log(msg = msg, level = l, log = log)
+    # def _trace(self, module, msg):
+    #   if not self.args.get("trace"): return
+    #   if module not in ['linter']: return
+    #   log = "trace_" + module
+    #   self.api.log(msg = msg, level = 'DEBUG', log = log)
+    # def Trace(self, msg): self._trace(module = self.__class__.__name__, msg = msg)
+  def _d(self, msg): 
+    if self.args.get("debug"): self.api.log(msg = msg, log = LOG_U3_DEBUG)
+  def _l(self, msg): 
+    self.api.log(msg = msg, log = LOG_U3)
+# endregion
+
+# region JUNK
 # # region MqttApp
 # class MqttApp(AppBase):
 #   triggers = []
@@ -397,3 +391,4 @@ class U3Base(ad.ADBase):
 #     self._set()
 #     self.publish_state()
 # # endregion
+# endregion

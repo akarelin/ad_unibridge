@@ -5,12 +5,14 @@ import json
 dt_consolidator:
   module: mqtt_dt
   class: dt_consolidator
+  debug: true
 
   unifi2mqtt_pattern: 'unifi/{site}/status/wifi/{SSID}/client/{device_name}'
   unifi2dt_pattern: 'unifi2dt/{site}/{person}/{device_slug}/state'
   sites:
     creekview:
-      SSIDs: Creekview
+      SSIDs:
+        - Creekview
     tulacosm: 
       unifi_id: iys2yyxt
       SSIDs:

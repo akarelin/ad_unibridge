@@ -2,17 +2,18 @@ import u3
 import json
 import datetime
 
-import telnetlib
-
 """
-remapper i2 btn:
-  module: remapper
-  class: Remapper
+remapper:
+  module: 2mqtt
+  class: event2MQTT
+  debug: True
+  default_namespace: deuce
 
-  base_topic: atlona
+  triggers:
+    - type: event
 """
 
-class Remapper(u3.U3Base):
+class ToMQTT(u3.U3Base):
   def initialize(self):
     super().initialize()
     self.debug(f"Initialized remapper {self.args}")
