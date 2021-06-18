@@ -1,3 +1,4 @@
+# region Imports
 import hassapi as hass
 import mqttapi as mqtt
 import adbase as ad
@@ -8,7 +9,7 @@ import json
 import traceback
 
 from datetime import datetime, time
-  
+# endregion
 # region Constants
 EVENT_MQTT = 'MQTT_MESSAGE'
 
@@ -27,43 +28,85 @@ T_EVENT = 'event'
 T_TIMER = 'timer'
 # endregion
 
-# region U3Base
 class U3Base(ad.ADBase):
-# region Defaults and Constructor  
+# region Defaults and Constructor
   api = None
   mqtt = None
   hass = None
   default_namespace = None
-  debug = False
-  triggers = []
+  __debug = False
 
   def initialize(self):
-    self.debug = args.get('debug')
+    self.__debug = self.args.get('debug')
     self.api = self.get_ad_api()
     self.default_namespace = self.args.get('default_namespace')
     self.mqtt = self.get_plugin_api(self.args.get('mqtt_namespace','mqtt'))
     self.hass = self.get_plugin_api(self.args.get('default_namespace'))
-    self._d(f"API Handles: {self.api} {self.mqtt} {self.hass}")
-    self.add_triggers()
-    self._d(f"Triggers {self.triggers}")
+    self.debug_U3(f"API Handles: {self.api} {self.mqtt} {self.hass}")
+# endregion    
+# region Publics
+  def Warn(self, msg): self.__log("WARNING", msg)
+  def Error(self, msg): self.__log("ERROR", msg)
+  def Debug(self, msg): self.__log("DEBUG", msg)
+# endregion
+# region Internals
+  def __log(self, level, msg):
+    l = level.upper()
+    if l not in ['DEBUG','INFO','ERROR','WARNING']: 
+      self.log_U3(f"Invalid log level {l}")
+      return
+    if l == 'DEBUG' and not self.__debug: return
+    log = LOG_DEFAULT_DEBUG if l == 'DEBUG' else LOG_DEFAULT
+    l = 'INFO' if l == 'DEBUG' else l
+    if len(msg) > LOG_LINE_LENGTH: msg += '\n'
+    self.api.log(msg = msg, level = l, log = log)
+    # def _trace(self, module, msg):
+    #   if not self.args.get("trace"): return
+    #   if module not in ['linter']: return
+    #   log = "trace_" + module
+    #   self.api.log(msg = msg, level = 'DEBUG', log = log)
+    # def Trace(self, msg): self._trace(module = self.__class__.__name__, msg = msg)
+  def debug_U3(self, msg): 
+    if self.args.get("debug"): self.api.log(msg = msg, log = LOG_U3_DEBUG)
+  def log_U3(self, msg): 
+    self.api.log(msg = msg, log = LOG_U3)
+# endregion
 
+class U3(U3Base):
+  triggers = []
+  def initialize(self):
+    super().initialize()
+    self.add_triggers()
+    self.debug_U3(f"Triggers {self.triggers}")
   def terminate(self):
     for t in self.triggers: pass      
-
-# endregion    
-# region Triggers
+# region Publics
   def add_triggers(self, triggers = []):
     if not triggers: triggers = self.args.get('triggers')
     if not triggers: return
-    self._d(f"Adding triggers {triggers}")
+    self.debug_U3(f"Adding triggers {triggers}")
     for t in triggers:
-      self._d(f"    Adding trigger {t}")
+      self.debug_U3(f"    Adding trigger {t}")
       if t['type'] == T_MQTT: self.add_mqtt_trigger(t)
       elif t['type'] == T_EVENT: self.add_event_trigger(t)
       elif t['type'] == T_STATE: self.add_state_trigger(t)
       elif t['type'] == T_TIMER: self.add_time_trigger(t)
       else: self.error(f"Invalid trigger type {t}")
+  @abstractmethod
+  def cb_timer(self, data):
+    raise NotImplementedError
+  @abstractmethod
+  def cb_event(self, data):
+    raise NotImplementedError
+  @abstractmethod
+  def cb_mqtt(self, data):
+    raise NotImplementedError
+  @abstractmethod
+  def cb_timer(self, data):
+    raise NotImplementedError
+# endregion
 
+# region Callback Internals
   def add_time_trigger(self, trigger):
     t = {}
     t['type'] = T_TIMER
@@ -74,21 +117,21 @@ class U3Base(ad.ADBase):
     t['interval'] = interval
     start = trigger.get('start',"now")
     t['start'] = start
-    t['handle'] = self.api.run_every(self._timer_callback, start, interval)
+    t['handle'] = self.api.run_every(self.__cb_timer, start, interval)
     self.triggers.append(t)
 
   def add_event_trigger(self, data):
     t = {}
     t['type'] = T_EVENT
     t['namespace'] = data.get('namespace',self.default_namespace)
-    event = data.get('event')
-    if event:
-      self._d(f"Adding event {event} trigger {data}")
-      t['handle'] = self.hass.listen_event(self._event_callback, event = event, **data)
-      if t['handle']: self.triggers.append(t)
-      else: self.error("Trigger no bueno")
-    else:
+    try: event = data.pop('event')
+    except:
       self.error("Event not specified for trigger")
+      return
+    self.debug_U3(f"Adding event {event} trigger {data}")
+    t['handle'] = self.hass.listen_event(self.__cb_event, event = event, **data)
+    if t['handle']: self.triggers.append(t)
+    else: self.error("Trigger no bueno")
 
   def add_mqtt_trigger(self, data):
     t = {}
@@ -100,7 +143,7 @@ class U3Base(ad.ADBase):
     # c['event'] = 'MQTT_MESSAGE'
     if '#' in topic or '+' in topic: c['wildcard'] = topic
     elif topic: c['topic'] = topic
-    self._d(f"MQTT Trigger {data} ==> {c}")
+    self.debug_U3(f"MQTT Trigger {data} ==> {c}")
 
     ### DEBUG
     #    t['handle'] = self.mqtt.listen_event(self._mqtt_callback, "MQTT_MESSAGE")
@@ -108,13 +151,13 @@ class U3Base(ad.ADBase):
 
     # MQTT Event    
     #    t['handle'] = self.mqtt.listen_event(self._mqtt_callback, "MQTT_MESSAGE", c)
-    t['handle'] = self.mqtt.listen_event(self._mqtt_callback, "MQTT_MESSAGE", wildcard = '#')
-    self._d(f"Adding mqtt trigger {c} from {data}")
+    t['handle'] = self.mqtt.listen_event(self.__cb_mqtt, "MQTT_MESSAGE", wildcard = '#')
+    self.debug_U3(f"Adding mqtt trigger {c} from {data}")
     if t['handle']: self.triggers.append(t)
     else: self.error("Trigger no bueno")
 
-    t['handle'] = self.mqtt.listen_event(self._mqtt_callback, "MQTT_MESSAGE", wildcard = 'i1/#')
-    self._d(f"Adding mqtt trigger {c} from {data}")
+    t['handle'] = self.mqtt.listen_event(self.__cb_mqtt, "MQTT_MESSAGE", wildcard = 'i1/#')
+    self.debug_U3(f"Adding mqtt trigger {c} from {data}")
     if t['handle']: self.triggers.append(t)
     else: self.error("Trigger no bueno")
 
@@ -126,51 +169,18 @@ class U3Base(ad.ADBase):
 
   def add_state_trigger(self, data):
     raise NotImplementedError
-# endregion
-# region Internals
-  def _mqtt_callback(self, event, data, kwargs):
-    #    self._d(f"MQTT Callback. Event {event} Data {data} KWARGS {kwargs}")
-    if 'i1/kp' in data.get('topic'):
-      self._d(f"Keypad detected {data.get('topic')}")
-      self.Callback(T_MQTT, data)
-    #    else: self._d(f"Not our topic {data.get('topic')}")
-  def _event_callback(self, event, data, kwargs):
-    data['event'] = event
-    self._d(f"Event Callback. Event {event} Data {data} KWARGS {kwargs}")
-    self.Callback(T_EVENT, data)
-  def _timer_callback(self, data):
-    self.Callback(T_TIMER, data)    
-  @abstractmethod
-  def Callback(self, type, data):
-    raise NotImplementedError
-# endregion
-# endregion
-# region Logging
-  def Warn(self, msg): self._log("WARNING", msg)
-  def Error(self, msg): self._log("ERROR", msg)
-  def Debug(self, msg): self._log("DEBUG", msg)
 
-  def _log(self, level, msg):
-    l = level.upper()
-    if l not in ['DEBUG','INFO','ERROR','WARNING']: 
-      self._l(f"Invalid log level {l}")
-      return
-    if l == 'DEBUG' and not self.debug: return
-    log = LOG_DEFAULT_DEBUG if l == 'DEBUG' else LOG_DEFAULT
-    l = 'INFO' if l == 'DEBUG' else l
-    if len(msg) > LOG_LINE_LENGTH: msg += '\n'
-    self.api.log(msg = msg, level = l, log = log)
-    # def _trace(self, module, msg):
-    #   if not self.args.get("trace"): return
-    #   if module not in ['linter']: return
-    #   log = "trace_" + module
-    #   self.api.log(msg = msg, level = 'DEBUG', log = log)
-    # def Trace(self, msg): self._trace(module = self.__class__.__name__, msg = msg)
-  def _d(self, msg): 
-    if self.args.get("debug"): self.api.log(msg = msg, log = LOG_U3_DEBUG)
-  def _l(self, msg): 
-    self.api.log(msg = msg, log = LOG_U3)
+  def __cb_mqtt(self, event, data, kwargs):
+    self.cb_mqtt(data)
+  def __cb_event(self, event, data, kwargs):
+    data['event'] = event
+    self.debug_U3(f"Event Callback. Event {event} Data {data} KWARGS {kwargs}")
+    self.cb_event(data)
+  def __cb_timer(self, data):
+    self.cb_timer(data)    
 # endregion
+
+
 
 # region JUNK
 # # region MqttApp
