@@ -22,6 +22,13 @@ LOG_U3_DEBUG = 'u3_debug_log'
 LOG_U3 = 'u3_log'
 LOG_LINE_LENGTH = 100
 
+DEBUG = 'DEBUG'
+INFO = 'INFO'
+ERROR = 'ERROR'
+WARNING = 'WARNING'
+LOG_LEVELS = [DEBUG,INFO,ERROR,WARNING]
+LOG_LEVELS_DEBUG = [DEBUG]
+
 T_STATE = 'state'
 T_MQTT = 'mqtt'
 T_EVENT = 'event'
@@ -29,70 +36,131 @@ T_TIMER = 'timer'
 # endregion
 
 class U3Base(ad.ADBase):
-# region Defaults and Constructor
   api = None
   mqtt = None
   hass = None
-  default_namespace = None
   __debug = False
 
   def initialize(self):
     self.__debug = self.args.get('debug')
     self.api = self.get_ad_api()
-    self.default_namespace = self.args.get('default_namespace')
     self.mqtt = self.get_plugin_api(self.args.get('mqtt_namespace','mqtt'))
-    self.hass = self.get_plugin_api(self.args.get('default_namespace'))
+    self.hass = self.get_plugin_api(self.default_namespace)
     self.debug_U3(f"API Handles: {self.api} {self.mqtt} {self.hass}")
-# endregion    
-# region Publics
-  def Warn(self, msg): self.__log("WARNING", msg)
-  def Error(self, msg): self.__log("ERROR", msg)
-  def Debug(self, msg): self.__log("DEBUG", msg)
-# endregion
-# region Internals
-  def __log(self, level, msg):
-    l = level.upper()
-    if l not in ['DEBUG','INFO','ERROR','WARNING']: 
-      self.log_U3(f"Invalid log level {l}")
-      return
-    if l == 'DEBUG' and not self.__debug: return
-    log = LOG_DEFAULT_DEBUG if l == 'DEBUG' else LOG_DEFAULT
-    l = 'INFO' if l == 'DEBUG' else l
-    if len(msg) > LOG_LINE_LENGTH: msg += '\n'
-    self.api.log(msg = msg, level = l, log = log)
-    # def _trace(self, module, msg):
-    #   if not self.args.get("trace"): return
-    #   if module not in ['linter']: return
-    #   log = "trace_" + module
-    #   self.api.log(msg = msg, level = 'DEBUG', log = log)
-    # def Trace(self, msg): self._trace(module = self.__class__.__name__, msg = msg)
+  @property
+  def default_namespace(self):
+    try: namespace = self.api.get_app('globals').default_namespace
+    except: namespace = 'default_namespace'
+    return namespace
+  def Warn(self, msg): self.__log(WARNING, msg)
+  def Error(self, msg): self.__log(ERROR, msg)
+  def Debug(self, msg): self.__log(DEBUG, msg)
   def debug_U3(self, msg): 
-    if self.args.get("debug"): self.api.log(msg = msg, log = LOG_U3_DEBUG)
+    if self.__debug: self.api.log(msg = msg, log = LOG_U3_DEBUG)
   def log_U3(self, msg): 
     self.api.log(msg = msg, log = LOG_U3)
-# endregion
+  def __log(self, level, msg):
+    l = level.upper()
+    if l not in LOG_LEVELS: self.log_U3(f"Invalid log level {l}")
+    elif l in LOG_LEVELS_DEBUG and not self.__debug: return
+    else: self.api.log(msg = msg, level = INFO if l in LOG_LEVELS_DEBUG else l, log = LOG_DEFAULT_DEBUG if l in LOG_LEVELS_DEBUG else LOG_DEFAULT)
+
+class Globals(U3Base):
+  default_namespace = None
+  areas = []
+  slugs = {}
+  keymap = {}
+  insteon = {}
+  ''' Example
+    creekview:
+      module: u3_combines
+      class: Globals
+      debug: True
+
+      default_namespace: deuce
+      areas: []
+      keymap:
+        kp/AO/AV:
+          - appletv
+          - htpc
+          - atlona
+          - 
+          - sonos
+          - pause
+          - speakers
+          - tv
+        kp/BBQ:
+          - 
+          - 
+          - 
+          - 
+          - 
+          - 
+          - 
+          - 
+      slugs:
+        entry: entry
+        stairs1: stairs/1
+      insteon:
+        ignore_events:
+        - RR
+        - OL
+        - ST
+    '''
+
+  def get(self, attribute):
+    if attribute == 'areas': return self.areas
+    elif attribute == 'slugs': return self.slugs
+    elif attribute == 'default_namespace': return self.default_namespace
+    elif attribute == 'insteon': return self.insteon
+    elif attribute == 'keymap': return self.keymap
+    else: return None
+  def initialize(self):
+    super().initialize()
+    self.default_namespace = self.args.get('default_namespace')
+    self.insteon = self.args.get('insteon')
+    self.slugs = self.args.get('slugs')
+    self.areas = self.args.get('areas')
 
 class U3(U3Base):
   triggers = []
+
+  def glob(self, attribute):
+    g = self.api.get_app('globals')
+    self.debug_U3(f"Global attribute {attribute}")
+    if g and attribute: return g.get(attribute)
+    elif g: return g
+    else: return None
+  @property
+  def areas(self):
+    return self.glob('areas')
+  @property
+  def default_namespace(self):
+    return self.glob('default_namespace')
+  @property
+  def keymap(self):
+    return self.glob('keymap')
+  @property
+  def insteon(self):
+    return self.glob('insteon')
   def initialize(self):
     super().initialize()
     self.add_triggers()
     self.debug_U3(f"Triggers {self.triggers}")
   def terminate(self):
-    for t in self.triggers: pass      
-# region Publics
+    for t in self.triggers: pass
   def add_triggers(self, triggers = []):
     if not triggers: triggers = self.args.get('triggers')
-    if not triggers: return
-    self.debug_U3(f"Adding triggers {triggers}")
-    for t in triggers:
-      ttype = t.pop('type',None)
-      self.debug_U3(f"    Adding trigger {t}")
-      if ttype == T_MQTT: self.add_mqtt_trigger(t)
-      elif ttype == T_EVENT: self.add_event_trigger(t)
-      elif ttype == T_STATE: self.add_state_trigger(t)
-      elif ttype == T_TIMER: self.add_time_trigger(t)
-      else: self.error(f"Invalid trigger type {t}")
+    if triggers: 
+      self.debug_U3(f"Adding triggers {triggers}")
+      for t in triggers:
+        ttype = t.pop('type',None)
+        self.debug_U3(f"    Adding trigger {t}")
+        if ttype == T_MQTT: self.add_mqtt_trigger(t)
+        elif ttype == T_EVENT: self.add_event_trigger(t)
+        elif ttype == T_STATE: self.add_state_trigger(t)
+        elif ttype == T_TIMER: self.add_time_trigger(t)
+        else: self.error(f"Invalid trigger type {t}")
   @abstractmethod
   def cb_timer(self, data):
     raise NotImplementedError
@@ -108,53 +176,34 @@ class U3(U3Base):
 # endregion
 # region Callback Internals
   def add_time_trigger(self, trigger):
-    t = {}
-    t['type'] = T_TIMER
-    interval = trigger.get('interval')
-    if not interval:
-      self.error("Unknown trigger {}", trigger)
-      return
-    t['interval'] = interval
     start = trigger.get('start',"now")
-    t['start'] = start
-    t['handle'] = self.api.run_every(self.__cb_timer, start, interval)
-    self.triggers.append(t)
+    interval = trigger.get('interval')
+    if not interval: self.error(f"Time trigger: invalid interval {trigger}")
+    else: handle = self.api.run_every(self.__cb_timer, start, interval)
+    if handle: self.triggers.append(type = T_TIMER, interval = interval, start = start, handle = handle)
   def __cb_timer(self, data):
     self.cb_timer(data)    
 
   def add_event_trigger(self, data):
-    t = {}
-    t['type'] = T_EVENT
-    t['namespace'] = data.get('namespace',self.default_namespace)
-    try: event = data.pop('event')
-    except:
-      self.error("Event not specified for trigger")
-      return
-    t['event'] = event
-    self.debug_U3(f"Adding event {event} trigger {data}")
-    t['handle'] = self.hass.listen_event(self.__cb_event, event = event, **data)
-    if t['handle']: self.triggers.append(t)
-    else: self.error("Trigger no bueno")
+    event = data.pop('event', None)
+    if event: handle = self.hass.listen_event(self.__cb_event, event = event, **data)
+    if handle: self.triggers.append(type = T_EVENT, handle = handle, data = data)
+    else: self.Error(f"Event trigger: invalid event {data}")
   def __cb_event(self, event, data, kwargs):
     data['event'] = event
     self.debug_U3(f"Event Callback. Event {event} Data {data} KWARGS {kwargs}")
     self.cb_event(data)
 
   def add_mqtt_trigger(self, data):
-    t = {}
-    t['type'] = T_MQTT
-    topic = data.pop('topic')
-    c = {}
-    self.mqtt.mqtt_subscribe(topic)
-    t['topic'] = topic
-    t['handle'] = self.mqtt.listen_event(callback = self.__cb_mqtt, event = "MQTT_MESSAGE")
-    self.debug_U3(f"Adding mqtt trigger {topic} from {data}")
-    self.triggers.append(t)
+    topic = data.pop('topic', None)
+    if topic:
+      self.mqtt.mqtt_subscribe(topic)
+      handle = self.mqtt.listen_event(callback = self.__cb_mqtt, event = EVENT_MQTT)
+      if handle: self.triggers.append(type = T_MQTT, topic = topic, data = data)
+    else: self.Error(f"MQTT trigger: invalid topic {topic}")
+
   def __cb_mqtt(self, event, data, kwargs):
-    w = data.get('wildcard')
-    if w:
-      w = w.replace('#','')
-      data['topic'] = data.get('topic').replace(w,'')
+    if data.get('wildcard'): data['topic'] = data.get('topic').replace(data.get('wildcard'),'')
     self.cb_mqtt(data)
 
   def add_state_trigger(self, data):
@@ -169,8 +218,8 @@ class U3(U3Base):
     self.cb_state(entity, attribute, old, new, kwargs)
 # endregion
 
-class U3Disco(U3):
-  pass
+# class U3Disco(U3):
+#   pass
 # region JUNK
 """
 class MqttApp(AppBase):

@@ -28,12 +28,10 @@ remapper:
 class x2mqtt(u3.U3):
   button = {}
   sensor = {}
-  ignore_events = []
   slugs = {}
 
   def initialize(self):
     super().initialize()
-    self.ignore_events = self.args.get('ignore_events')
     self.slugs = self.args.get('slugs')
     
     self.button = self.args.get('button')
@@ -112,7 +110,7 @@ class x2mqtt(u3.U3):
   def I2Entity(self, data):
     topic = data.get('topic')
     payload = json.loads(data.get('payload'))
-    if payload['reason'] not in ['device']: return
+    if payload.get('reason') not in ['device']: return
  
     eparts = topic.split('/')
     eparts.remove('state')
