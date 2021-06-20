@@ -24,7 +24,7 @@ remapper:
       event: isy994_control
 """
 
-class ToMQTT(u3.U3):
+class x2mqtt(u3.U3):
   button = {}
   sensor = {}
   ignore_events = []
@@ -46,7 +46,14 @@ class ToMQTT(u3.U3):
     self.Debug(f"Initialized remapper {self.args}")
 
   def cb_mqtt(self, data):
-    self.I2Entity(self, data)
+    w = data.get('wildcard')
+    topic = data.pop('topic')
+    if w:
+      data.pop('wildcard')
+      wildcard = w.replace('#','')
+      topic = topic.replace(wildcard, '')
+      data['topic'] = topic
+    self.I2Entity(data)
 
   def cb_event(self, data):
     if data['event'] in ['isy994_control']: self.ISYEntity(data)
@@ -57,33 +64,55 @@ class ToMQTT(u3.U3):
     if not entity_id: 
       self.Warn(f"No entity_id in {data}")
       return
-    
-    control = data.get('control')
+
+    control = data.get('control').replace('D','')
     if not control or control in self.ignore_events: 
       self.Debug(f"Ignoring control {control}")
       return
+    data['control'] = control
 
-    try:
-      eparts = re.findall(self.button['regex'], entity_id)[0].split('_')
-      if eparts[-1] in self.slugs: eparts[-1]=self.slugs.get(eparts[-1])
+    if self.button:
+      try:
+        eparts = re.findall(self.button['regex'], entity_id)[0].split('_')
+        slug = eparts.pop()
+        if slug in self.slugs: slug = self.slugs.get(slug)
+        eparts.append(slug)
+      except: pass
       self.ISYButton(eparts, control)
-      return
-    except:  self.Debug(f"{entity_id} is not a button")
-
-    try:
-      eparts = re.findall(self.sensor['regex'], entity_id)[0].split('_')
+    elif self.sensor:
+      try:
+        eparts = re.findall(self.sensor['regex'], entity_id)[0].split('_')
+      except: pass
       self.ISYSensor(eparts, data)
-      return
-    except:
-      self.Debug(f"{entity_id} is not a sensor")
-
+    
   def ISYSensor(self, eparts, data):
-    self.Debug(f"Sensor {eparts} with {data}")
+    tail = eparts.pop()
+    tail = tail[1] if tail in ['s1','s2'] else '' if tail in ['s','sensor'] else tail
+    eparts.append(tail)
+    extract = ['control','value','uom']
+    d = {key: data[key] for key in extract}
+    self.Sensor(eparts, d)
 
   def ISYButton(self, eparts, control):
     keypad = eparts.pop()
-    button = eparts.join('_')
+    button = '_'.join(eparts)
     self.Button(keypad, button, control)
+  def cb_state(self, entity, attribute, old, new, kwargs):
+    attributes = {}
+    eparts = entity.split('.')[1].split('_')
+    attributes = new.get('attributes')
+    power_attributes = self.args.get('power_attributes')
+    for k,v in attributes.items():
+      if k in power_attributes:
+        try:
+          f = float(v)
+          self.PowerSensor(eparts, f)
+          return
+        except: pass
+
+  def PowerSensor(self, eparts, value):
+    topic = '/'.join(['pwr__']+eparts)
+    self.mqtt.mqtt_publish(topic, value)
 
   def I2Entity(self, data):
     topic = data.get('topic')
@@ -91,20 +120,26 @@ class ToMQTT(u3.U3):
     if payload['reason'] not in ['device']: return
  
     eparts = topic.split('/')
-    eparts.remove('kp')
     eparts.remove('state')
     
     button = eparts.pop()
-    keypad = eparts.join('/')
+    keypad = '/'.join(eparts)
 
     control = "F" if payload['mode'] in ['fast'] else ""
-    control += payload['cmd'][:2].upper()
+    control += payload['state'][:2].upper()
     self.Button(keypad, button, control)
 
   def Button(self, keypad, button, control):
     self.Debug(f"Button [{keypad}] -> [{button}]")
-    topic = ['btn__',keypad,button].join('/')
+    topic = '/'.join(['btn__',keypad,button])
     self.mqtt.mqtt_publish(topic, control)
+
+  def Sensor(self, eparts, data):
+    topic = '/'.join(['snsr__']+eparts)
+    self.mqtt.mqtt_publish(topic, json.dumps(data))
+ 
+    
+
 
     # {'entity_id': 'sensor.btn_pendant_ao1', 
     # 'control': 'DOF', 
@@ -117,7 +152,26 @@ class ToMQTT(u3.U3):
     # 'time_fired': '2021-06-18T04:29:35.468363+00:00', 
     # 'context': {...}}}
 
-# LOGGER='DEBUG_ISY'
+class mqtt2x(u3.U3):
+  switch = {}
+  def initialize(self):
+    super().initialize()
+     
+  def SwitchIndicator(self, eparts, data):
+    entity = 'switch.ind_'+'_'.join(eparts)
+    if self.hass.entity_exists(entity):
+      self.Debug(f"Exists {entity}")
+    else:
+      self.Debug(f"Not Exist {entity}")
+
+  def cb_mqtt(self, data):
+    topic = data.get('topic')
+    w = data.get('wildcard')
+    if w:
+      topic = topic.replace(w.replace('#',''), '')
+    eparts = topic.split('/')
+    self.SwitchIndicator(eparts, data.get('payload'))
+
 # DEBUG = True
 # def Debug(message): 
 #   if DEBUG: hass.services.call("notify", LOGGER, {"message": message }, False)

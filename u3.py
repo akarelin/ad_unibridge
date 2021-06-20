@@ -86,11 +86,12 @@ class U3(U3Base):
     if not triggers: return
     self.debug_U3(f"Adding triggers {triggers}")
     for t in triggers:
+      ttype = t.pop('type',None)
       self.debug_U3(f"    Adding trigger {t}")
-      if t['type'] == T_MQTT: self.add_mqtt_trigger(t)
-      elif t['type'] == T_EVENT: self.add_event_trigger(t)
-      elif t['type'] == T_STATE: self.add_state_trigger(t)
-      elif t['type'] == T_TIMER: self.add_time_trigger(t)
+      if ttype == T_MQTT: self.add_mqtt_trigger(t)
+      elif ttype == T_EVENT: self.add_event_trigger(t)
+      elif ttype == T_STATE: self.add_state_trigger(t)
+      elif ttype == T_TIMER: self.add_time_trigger(t)
       else: self.error(f"Invalid trigger type {t}")
   @abstractmethod
   def cb_timer(self, data):
@@ -102,7 +103,7 @@ class U3(U3Base):
   def cb_mqtt(self, data):
     raise NotImplementedError
   @abstractmethod
-  def cb_timer(self, data):
+  def cb_state(self, entity, attribute, old, new, kwargs):
     raise NotImplementedError
 # endregion
 
@@ -119,6 +120,8 @@ class U3(U3Base):
     t['start'] = start
     t['handle'] = self.api.run_every(self.__cb_timer, start, interval)
     self.triggers.append(t)
+  def __cb_timer(self, data):
+    self.cb_timer(data)    
 
   def add_event_trigger(self, data):
     t = {}
@@ -128,56 +131,39 @@ class U3(U3Base):
     except:
       self.error("Event not specified for trigger")
       return
+    t['event'] = event
     self.debug_U3(f"Adding event {event} trigger {data}")
     t['handle'] = self.hass.listen_event(self.__cb_event, event = event, **data)
     if t['handle']: self.triggers.append(t)
     else: self.error("Trigger no bueno")
+  def __cb_event(self, event, data, kwargs):
+    data['event'] = event
+    self.debug_U3(f"Event Callback. Event {event} Data {data} KWARGS {kwargs}")
+    self.cb_event(data)
 
   def add_mqtt_trigger(self, data):
     t = {}
     t['type'] = T_MQTT
     topic = data.pop('topic')
-    self.mqtt.mqtt_subscribe(topic)
-
     c = {}
-    # c['event'] = 'MQTT_MESSAGE'
-    if '#' in topic or '+' in topic: c['wildcard'] = topic
-    elif topic: c['topic'] = topic
-    self.debug_U3(f"MQTT Trigger {data} ==> {c}")
-
-    ### DEBUG
-    #    t['handle'] = self.mqtt.listen_event(self._mqtt_callback, "MQTT_MESSAGE")
-    #    if t['handle']: self.triggers.append(t)
-
-    # MQTT Event    
-    #    t['handle'] = self.mqtt.listen_event(self._mqtt_callback, "MQTT_MESSAGE", c)
-    t['handle'] = self.mqtt.listen_event(self.__cb_mqtt, "MQTT_MESSAGE", wildcard = '#')
-    self.debug_U3(f"Adding mqtt trigger {c} from {data}")
-    if t['handle']: self.triggers.append(t)
-    else: self.error("Trigger no bueno")
-
-    t['handle'] = self.mqtt.listen_event(self.__cb_mqtt, "MQTT_MESSAGE", wildcard = 'i1/#')
-    self.debug_U3(f"Adding mqtt trigger {c} from {data}")
-    if t['handle']: self.triggers.append(t)
-    else: self.error("Trigger no bueno")
-
-    # AD Event    
-        # t['handle'] = self.api.listen_event(self._event_callback, **c)
-        # self._d(f"Adding AD trigger {c} from {data}")
-        # if t['handle']: self.triggers.append(t)
-        # else: self.error("Trigger no bueno")
-
-  def add_state_trigger(self, data):
-    raise NotImplementedError
-
+    self.mqtt.mqtt_subscribe(topic)
+    t['topic'] = topic
+    t['handle'] = self.mqtt.listen_event(callback = self.__cb_mqtt, event = "MQTT_MESSAGE")
+    self.debug_U3(f"Adding mqtt trigger {topic} from {data}")
+    self.triggers.append(t)
   def __cb_mqtt(self, event, data, kwargs):
     self.cb_mqtt(data)
-  def __cb_event(self, event, data, kwargs):
-    data['event'] = event
-    self.debug_U3(f"Event Callback. Event {event} Data {data} KWARGS {kwargs}")
-    self.cb_event(data)
-  def __cb_timer(self, data):
-    self.cb_timer(data)    
+
+  def add_state_trigger(self, data):
+    t = {}
+    data['attribute'] = data.get('attribute','all')
+    data['namespace'] = data.get('namespace', self.default_namespace)
+    t['type'] = T_STATE
+    t['handle'] = self.hass.listen_state(self.__cb_state, **data)
+    if t['handle']: self.triggers.append(t)
+    else: self.error("Trigger no bueno")
+  def __cb_state(self, entity, attribute, old, new, kwargs):
+    self.cb_state(entity, attribute, old, new, kwargs)
 # endregion
 
 
