@@ -205,6 +205,7 @@ class mqtt2x(u3.U3):
     else:
       self.Debug(f"Entity {entity} not found")
 
+# region Legacy Code
 """
 DEBUG = True
 def Debug(message): 
@@ -365,3 +366,139 @@ d = data.get('data')
 rd = data.get('raw_data')
 Publish(d)
 """
+# endregion
+# region Legacy YAML
+"""
+    - kitchen: 'k(\d{1})'
+    - guest: 'guest(\d{1})'
+    - mbed: 'mbed(\w{1})'
+    - mbath: 'mbath(\w{1})'
+    - mbs: 'mbs_(\w+)'
+    - master: 'master_(\w+)'
+    - courtyard: 'courtyard(\d{1})'
+    - foyer: 'f([a-z1-9]{1})'
+    - ao: 'ao(\d{1})'
+    - ao: 'ao_(\w+)'
+    - fr: 'fr(\d{1})'
+    - fr: 'fr_(\w+)'
+    - east: 'east(\d{1})'
+    - garage: 'garage(\d{1})'
+    - garage: 'garage_(\w+)'
+    - patio: 'patio(\d{1})'
+    - patio: 'patio_(\w+)'
+    - house: 'house_(\w+)'
+    - landscape: 'landscape_6'
+    - gym
+    - westroom
+    - landing
+    - northroom
+    - bbq
+    - entry
+    
+
+  slugs:
+    - kitchen: 'k(\d{1})'
+    - guest: 'guest(\d{1})'
+    - mbed: 'mbed(\w{1})'
+    - mbath: 'mbath(\w{1})'
+    - mbs: 'mbs_(\w+)'
+    - master: 'master_(\w+)'
+    - courtyard: 'courtyard(\d{1})'
+    - foyer: 'f([a-z1-9]{1})'
+    - ao: 'ao(\d{1})'
+    - ao: 'ao_(\w+)'
+    - fr: 'fr(\d{1})'
+    - fr: 'fr_(\w+)'
+    - east: 'east(\d{1})'
+    - garage: 'garage(\d{1})'
+    - garage: 'garage_(\w+)'
+    - patio: 'patio(\d{1})'
+    - patio: 'patio_(\w+)'
+    - house: 'house_(\w+)'
+    - landscape: 'landscape_6'
+    - gym
+    - westroom
+    - landing
+    - northroom
+    - bbq
+    - entry
+
+  
+AREA_SYNONYMS = {
+  'garage':'garage',
+  'guest':'guest',
+  'staircase':'staircase',
+  'courtyard':'courtyard',
+  'ao':'ao',
+  'mbs':'mbs',
+  'mbath':'mbath',
+  'mbed':'mbed',
+  'foyer':'foyer',
+  'gym':'gym',
+  'guest':'guest',
+  'patio':'patio',
+  'east':'east',
+  'kp':'downstairs',
+  'fr':'fr',
+  'gar':'garage',
+  'k':'kitchen',
+  'g':'garage',
+  'f':'foyer'
+}
+
+    - kitchen: 'k(\d{1})'
+    - guest: 'guest(\d{1})'
+    - mbed: 'mbed(\w{1})'
+    - mbath: 'mbath(\w{1})'
+    - mbs: 'mbs_(\w+)'
+    - master: 'master_(\w+)'
+    - courtyard: 'courtyard(\d{1})'
+    - foyer: 'f([a-z1-9]{1})'
+    - ao: 'ao(\d{1})'
+    - ao: 'ao_(\w+)'
+    - fr: 'fr(\d{1})'
+    - fr: 'fr_(\w+)'
+    - east: 'east(\d{1})'
+    - garage: 'garage(\d{1})'
+    - garage: 'garage_(\w+)'
+    - patio: 'patio(\d{1})'
+    - patio: 'patio_(\w+)'
+    - house: 'house_(\w+)'
+    - landscape: 'landscape_6'
+    - gym
+    - westroom
+    - landing
+    - northroom
+    - bbq
+    - entry
+    
+
+  slugs:
+    - kitchen: 'k(\d{1})'
+    - guest: 'guest(\d{1})'
+    - mbed: 'mbed(\w{1})'
+    - mbath: 'mbath(\w{1})'
+    - mbs: 'mbs_(\w+)'
+    - master: 'master_(\w+)'
+    - courtyard: 'courtyard(\d{1})'
+    - foyer: 'f([a-z1-9]{1})'
+    - ao: 'ao(\d{1})'
+    - ao: 'ao_(\w+)'
+    - fr: 'fr(\d{1})'
+    - fr: 'fr_(\w+)'
+    - east: 'east(\d{1})'
+    - garage: 'garage(\d{1})'
+    - garage: 'garage_(\w+)'
+    - patio: 'patio(\d{1})'
+    - patio: 'patio_(\w+)'
+    - house: 'house_(\w+)'
+    - landscape: 'landscape_6'
+    - gym
+    - westroom
+    - landing
+    - northroom
+    - bbq
+    - entry
+
+"""  
+# endregion
