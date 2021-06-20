@@ -2,6 +2,7 @@ import u3
 import json
 import datetime
 import re
+import pprint
 
 """
 remapper:
@@ -46,13 +47,7 @@ class x2mqtt(u3.U3):
     self.Debug(f"Initialized remapper {self.args}")
 
   def cb_mqtt(self, data):
-    w = data.get('wildcard')
     topic = data.pop('topic')
-    if w:
-      data.pop('wildcard')
-      wildcard = w.replace('#','')
-      topic = topic.replace(wildcard, '')
-      data['topic'] = topic
     self.I2Entity(data)
 
   def cb_event(self, data):
@@ -137,196 +132,236 @@ class x2mqtt(u3.U3):
   def Sensor(self, eparts, data):
     topic = '/'.join(['snsr__']+eparts)
     self.mqtt.mqtt_publish(topic, json.dumps(data))
- 
-    
-
-
-    # {'entity_id': 'sensor.btn_pendant_ao1', 
-    # 'control': 'DOF', 
-    # 'value': 0,
-    #  'formatted': 0,
-    #  'uom': '', 
-    # 'precision': '0',
-    #  'metadata': 
-    # {'origin': 'LOCAL', 
-    # 'time_fired': '2021-06-18T04:29:35.468363+00:00', 
-    # 'context': {...}}}
 
 class mqtt2x(u3.U3):
   switch = {}
+  itype = None
+  buttonmap = {}
   def initialize(self):
     super().initialize()
-     
-  def SwitchIndicator(self, eparts, data):
-    entity = 'switch.ind_'+'_'.join(eparts)
-    if self.hass.entity_exists(entity):
-      self.Debug(f"Exists {entity}")
+    self.itype = self.args.get('type')
+    if self.itype == 'i2':
+      self.LoadKeymap()
+      self.add_mqtt_trigger({'topic':'insteon/#'})
+    elif self.itype == 'ind':
+      self.add_mqtt_trigger({'topic':'ind/#'})
     else:
-      self.Debug(f"Not Exist {entity}")
+      self.Error(f"Unknown indicator type {itype}")
+
+  def LoadKeymap(self):
+    bm = {}
+    keymap = self.args.get('keymap')
+    designators = self.args.get('designators')
+    if designators: designators = [d.lower() for d in designators if d]
+    areas = self.args.get('areas')
+    areas = [a.lower() for a in areas]
+    for k,btns in keymap.items():
+      if len(btns) != 8:
+        self.Warn(f"Keypad {k}: len({btns}) == {len(btns)}")
+        continue
+      keypad = k.lower().split('/')
+      base_topic = ['insteon']
+      base_topic += keypad
+      base_topic.append('set')
+      if 'kp' in keypad: keypad.remove('kp')
+      for i, indicator in enumerate(btns):
+        if not indicator: continue
+        topic = ['ind']
+        keypad_areas = list(set(keypad) & set(areas))
+        if len(keypad_areas) == 1: topic.append(keypad_areas[0])
+        elif len(keypad_areas) > 1:
+          self.Error(f"Keypad {keypad} has multiple areas {keypad_areas}")
+          continue
+        t1 = '/'.join(topic+[indicator.lower()])
+        t2 = '/'.join(base_topic+[str(i)])
+        if t1 in bm: bm[t1].append(t2)
+        else: bm[t1] = [t2]
+    self.Debug(pprint.pformat(bm))
+    self.buttonmap = bm
 
   def cb_mqtt(self, data):
     topic = data.get('topic')
-    w = data.get('wildcard')
-    if w:
-      topic = topic.replace(w.replace('#',''), '')
+    payload = data.get('payload')
     eparts = topic.split('/')
-    self.SwitchIndicator(eparts, data.get('payload'))
+    value = data.get('payload').upper()
+    if value in ['ON','OFF']:
+      if self.itype == 'i2': self.I2Indicator('ind/'+topic, value)
+      elif self.itype == 'ind': self.ind2Indicator(eparts, value)
+    else: self.Warn(f"Unknown payload {payload}")
 
-# DEBUG = True
-# def Debug(message): 
-#   if DEBUG: hass.services.call("notify", LOGGER, {"message": message }, False)
-# def Log(message): 
-#   hass.services.call("notify", LOGGER, {"message": message }, False)
-
-# AREAS = ['ao','master','kitchen','garage']
-# AREA_SYNONYMS = {
-#   'garage':'garage',
-#   'guest':'guest',
-#   'staircase':'staircase',
-#   'courtyard':'courtyard',
-#   'ao':'ao',
-#   'mbs':'mbs',
-#   'mbath':'mbath',
-#   'mbed':'mbed',
-#   'foyer':'foyer',
-#   'gym':'gym',
-#   'guest':'guest',
-#   'patio':'patio',
-#   'east':'east',
-#   'kp':'downstairs',
-#   'fr':'fr',
-#   'gar':'garage',
-#   'k':'kitchen',
-#   'g':'garage',
-#   'f':'foyer'
-# }
-# BTN_IGNORE = ['RR','OL','ST']
-
-# def PublishSensor(data):
-#     t = ['sensor']
-#     attr = None
-#     payload = None
-#     #Log(f"Sensor Data: {data}")
-#     control = data.get('control')
-#     entity_id = data.get('entity_id').split('.')[1]
-#     eparts = entity_id.split('_')
-#     Debug("\tControl {control}\n\tEntity {entity_id}\n\teparts {eparts}")
-#     Debug(f"\n\tControl {control}\n\tEntity {entity_id}\n\teparts {eparts}")
-#     index = None
-#     area = eparts.pop(0)
-#     t.append(area)
-#     device_type = None
-#     if eparts:
-#       if 'sensor' in eparts: eparts.remove('sensor')
-#       if 'duskdawn' in eparts: 
-#         eparts.remove('duskdawn')
-#         attr = 'is_dark'
-#       if 'door' in eparts: 
-#         device_type = 'door'
-#         attr = 'opening'
-#       for dt in ['battery','lux','dusk','heartbeat']:
-#         if dt in eparts:
-#           device_type = dt
-#           eparts.remove(device_type)
-#           break
-#       for prefix in ['s0','s1','s2','s3']:
-#         if prefix in eparts:
-#           index = prefix[1]
-#           eparts.remove(prefix)
-#           break
-#     else: Log(f"No eparts in data: {data}")
-
-#     if eparts: t.append('_'.join(eparts))
-#     if index: t.append(index)
-
-#     try: v = float(data.get('value'))
-#     except: Log(f"No value in data: {data}")
-
-#     if not attr:
-#       if control in ['DON','DOF']:
-#           attr = 'motion'
-#           payload = 'on' if control == 'DON' else 'off'
-#       elif control == 'CLITEMP':
-#           attr = 'temp'
-#           if v: payload = v/10
-#       elif control == 'LUMIN':
-#           attr = 'lux'
-#           if v: payload = v
-
-#     if attr: t.append(attr)
-
-#     topic = '/'.join(t)
-#     Log(f"Sensor: {entity_id}, Area {area}, Control {control}, value {v}")
-#     Debug(f"  ==> {payload} to {topic}")
-#     if payload: hass.services.call("mqtt", "publish", {"topic": topic, "payload": payload}, False)
-
-# def PublishButton(data):
-#     e = ""
-#     control = data.get('control')
-#     if control in BTN_IGNORE: return
-#     entity_id = data.get('entity_id')
-  
-#     e = entity_id.split('.')[1].replace('btn_','')
-#     eparts = e.split('_')
-
-#     keypad = ""
-#     area = eparts.pop()
-#     button = '_'.join(eparts)
-
-#     for k, v in AREA_SYNONYMS.items():
-#         if area.startswith(k):
-#             keypad = area.replace(k,'')
-#             area = v
-#             break
-#     topic = '/'.join(['btn',area,keypad,button])
-#     if control[0] == 'D':
-#         payload = control[1:]
-#     else:
-#         payload = control
-#     Log(f"Entity: {e}, Area {area}, Keypad {keypad}, button {button}")
-#     hass.services.call("mqtt", "publish", {"topic": topic, "payload": payload}, False)
-
-# def PublishOther(data):
-#     e = ""
-#     path = ['isy']
-#     control = data.get('control')
-#     if control in BTN_IGNORE: return
-#     if control[0] == 'D':
-#       control = control[1:]
-#     entity_id = data.get('entity_id')
+  def I2Indicator(self, topic, payload):
+    topics = self.buttonmap.get(topic)
+    if topics:
+      for t in topics: 
+        self.mqtt.mqtt_publish(t, payload)
     
-#     e = entity_id.split('.')[1].replace('btn_','')
-#     Debug(f"\n\tOther entity: {e}")
+  def ind2Indicator(self, eparts, data):
+    entity = 'switch.ind_' + '_'.join(eparts)
+    if self.hass.entity_exists(entity):
+      if payload == 'ON':
+        self.hass.turn_on(entity)
+      elif payload == 'OFF':
+        self.hass.turn_off(entity)
+    else:
+      self.Debug(f"Entity {entity} not found")
 
-#     eparts = e.split('_')
+"""
+DEBUG = True
+def Debug(message): 
+  if DEBUG: hass.services.call("notify", LOGGER, {"message": message }, False)
+def Log(message): 
+  hass.services.call("notify", LOGGER, {"message": message }, False)
 
-#     Debug(f"\teparts: {eparts}")
-#     for a in AREAS:
-#       if a in eparts:
-#         path.append(a)
-#         eparts.remove(a)
-#     path.extend(eparts)
+AREAS = ['ao','master','kitchen','garage']
+AREA_SYNONYMS = {
+  'garage':'garage',
+  'guest':'guest',
+  'staircase':'staircase',
+  'courtyard':'courtyard',
+  'ao':'ao',
+  'mbs':'mbs',
+  'mbath':'mbath',
+  'mbed':'mbed',
+  'foyer':'foyer',
+  'gym':'gym',
+  'guest':'guest',
+  'patio':'patio',
+  'east':'east',
+  'kp':'downstairs',
+  'fr':'fr',
+  'gar':'garage',
+  'k':'kitchen',
+  'g':'garage',
+  'f':'foyer'
+}
+BTN_IGNORE = ['RR','OL','ST']
 
-#     topic = '/'.join(path)
-#     payload = control
-#     Log(f"\tExperimental: {payload} to {topic}")
-#     hass.services.call("mqtt", "publish", {"topic": topic, "payload": payload}, False)
+def PublishSensor(data):
+    t = ['sensor']
+    attr = None
+    payload = None
+    #Log(f"Sensor Data: {data}")
+    control = data.get('control')
+    entity_id = data.get('entity_id').split('.')[1]
+    eparts = entity_id.split('_')
+    Debug("\tControl {control}\n\tEntity {entity_id}\n\teparts {eparts}")
+    Debug(f"\n\tControl {control}\n\tEntity {entity_id}\n\teparts {eparts}")
+    index = None
+    area = eparts.pop(0)
+    t.append(area)
+    device_type = None
+    if eparts:
+      if 'sensor' in eparts: eparts.remove('sensor')
+      if 'duskdawn' in eparts: 
+        eparts.remove('duskdawn')
+        attr = 'is_dark'
+      if 'door' in eparts: 
+        device_type = 'door'
+        attr = 'opening'
+      for dt in ['battery','lux','dusk','heartbeat']:
+        if dt in eparts:
+          device_type = dt
+          eparts.remove(device_type)
+          break
+      for prefix in ['s0','s1','s2','s3']:
+        if prefix in eparts:
+          index = prefix[1]
+          eparts.remove(prefix)
+          break
+    else: Log(f"No eparts in data: {data}")
 
-# def Publish(data):
-#     e = ""
-#     d = ""
-#     control = data.get('control')
-#     entity_id = data.get('entity_id')
+    if eparts: t.append('_'.join(eparts))
+    if index: t.append(index)
 
-#     d, e = entity_id.split('.')
+    try: v = float(data.get('value'))
+    except: Log(f"No value in data: {data}")
 
-#     if d in ['binary_sensor']:
-#       PublishSensor(data)
-#     elif e.startswith('btn_'):
-#       PublishButton(data)
-#     else:
-#       PublishOther(data)
+    if not attr:
+      if control in ['DON','DOF']:
+          attr = 'motion'
+          payload = 'on' if control == 'DON' else 'off'
+      elif control == 'CLITEMP':
+          attr = 'temp'
+          if v: payload = v/10
+      elif control == 'LUMIN':
+          attr = 'lux'
+          if v: payload = v
 
-# d = data.get('data')
-# rd = data.get('raw_data')
-# Publish(d)
+    if attr: t.append(attr)
+
+    topic = '/'.join(t)
+    Log(f"Sensor: {entity_id}, Area {area}, Control {control}, value {v}")
+    Debug(f"  ==> {payload} to {topic}")
+    if payload: hass.services.call("mqtt", "publish", {"topic": topic, "payload": payload}, False)
+
+def PublishButton(data):
+    e = ""
+    control = data.get('control')
+    if control in BTN_IGNORE: return
+    entity_id = data.get('entity_id')
+  
+    e = entity_id.split('.')[1].replace('btn_','')
+    eparts = e.split('_')
+
+    keypad = ""
+    area = eparts.pop()
+    button = '_'.join(eparts)
+
+    for k, v in AREA_SYNONYMS.items():
+        if area.startswith(k):
+            keypad = area.replace(k,'')
+            area = v
+            break
+    topic = '/'.join(['btn',area,keypad,button])
+    if control[0] == 'D':
+        payload = control[1:]
+    else:
+        payload = control
+    Log(f"Entity: {e}, Area {area}, Keypad {keypad}, button {button}")
+    hass.services.call("mqtt", "publish", {"topic": topic, "payload": payload}, False)
+
+def PublishOther(data):
+    e = ""
+    path = ['isy']
+    control = data.get('control')
+    if control in BTN_IGNORE: return
+    if control[0] == 'D':
+      control = control[1:]
+    entity_id = data.get('entity_id')
+    
+    e = entity_id.split('.')[1].replace('btn_','')
+    Debug(f"\n\tOther entity: {e}")
+
+    eparts = e.split('_')
+
+    Debug(f"\teparts: {eparts}")
+    for a in AREAS:
+      if a in eparts:
+        path.append(a)
+        eparts.remove(a)
+    path.extend(eparts)
+
+    topic = '/'.join(path)
+    payload = control
+    Log(f"\tExperimental: {payload} to {topic}")
+    hass.services.call("mqtt", "publish", {"topic": topic, "payload": payload}, False)
+
+def Publish(data):
+    e = ""
+    d = ""
+    control = data.get('control')
+    entity_id = data.get('entity_id')
+
+    d, e = entity_id.split('.')
+
+    if d in ['binary_sensor']:
+      PublishSensor(data)
+    elif e.startswith('btn_'):
+      PublishButton(data)
+    else:
+      PublishOther(data)
+
+d = data.get('data')
+rd = data.get('raw_data')
+Publish(d)
+"""

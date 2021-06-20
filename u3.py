@@ -152,6 +152,10 @@ class U3(U3Base):
     self.debug_U3(f"Adding mqtt trigger {topic} from {data}")
     self.triggers.append(t)
   def __cb_mqtt(self, event, data, kwargs):
+    w = data.get('wildcard')
+    if w:
+      w = w.replace('#','')
+      data['topic'] = data.get('topic').replace(w,'')
     self.cb_mqtt(data)
 
   def add_state_trigger(self, data):
