@@ -175,6 +175,7 @@ class mqtt2x(u3.U3):
     topic = data.get('topic')
     payload = data.get('payload')
     eparts = topic.split('/')
+    self.Debug(f"Received {topic} with {payload}")
     value = data.get('payload').upper()
     if value in ['ON','OFF']:
       if self.itype == 'i2': self.I2Indicator('ind/'+topic, value)
