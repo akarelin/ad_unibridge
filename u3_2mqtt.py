@@ -32,13 +32,10 @@ class x2mqtt(u3.U3):
 
   def initialize(self):
     super().initialize()
-    self.slugs = self.args.get('slugs')
-    
     self.button = self.args.get('button')
-    if self.button:
-      if not self.button['regex']: self.Error(f"No button regex specified")
-
+    if self.button and not self.button['regex']: self.Error(f"No button regex specified")
     self.sensor = self.args.get('sensor')
+
     if self.sensor:
       if not self.sensor['regex']: self.Error(f"No sensor regex specified")
 
@@ -148,12 +145,9 @@ class mqtt2x(u3.U3):
 
   def LoadKeymap(self):
     bm = {}
-    keymap = self.args.get('keymap')
     designators = self.args.get('designators')
     if designators: designators = [d.lower() for d in designators if d]
-    areas = self.args.get('areas')
-    areas = [a.lower() for a in areas]
-    for k,btns in keymap.items():
+    for k,btns in self.keymap.items():
       if len(btns) != 8:
         self.Warn(f"Keypad {k}: len({btns}) == {len(btns)}")
         continue
@@ -165,7 +159,7 @@ class mqtt2x(u3.U3):
       for i, indicator in enumerate(btns):
         if not indicator: continue
         topic = ['ind']
-        keypad_areas = list(set(keypad) & set(areas))
+        keypad_areas = list(set(keypad) & set(self.areas))
         if len(keypad_areas) == 1: topic.append(keypad_areas[0])
         elif len(keypad_areas) > 1:
           self.Error(f"Keypad {keypad} has multiple areas {keypad_areas}")

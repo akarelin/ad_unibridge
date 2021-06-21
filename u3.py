@@ -119,34 +119,15 @@ class Globals(U3Base):
     super().initialize()
     self.default_namespace = self.args.get('default_namespace')
     self.insteon = self.args.get('insteon')
-    self.slugs = self.args.get('slugs')
-    self.areas = self.args.get('areas')
+    self.slugs = [s.lower() for s in self.args.get('slugs')]
+    self.areas = [a.lower() for a in self.args.get('areas')]
+    self.keymap = self.args.get('keymap')
 
 class U3(U3Base):
   triggers = []
-
-  def glob(self, attribute):
-    g = self.api.get_app('globals')
-    self.debug_U3(f"Global attribute {attribute}")
-    if g and attribute: return g.get(attribute)
-    elif g: return g
-    else: return None
-  @property
-  def areas(self):
-    return self.glob('areas')
-  @property
-  def default_namespace(self):
-    return self.glob('default_namespace')
-  @property
-  def keymap(self):
-    return self.glob('keymap')
-  @property
-  def insteon(self):
-    return self.glob('insteon')
   def initialize(self):
     super().initialize()
     self.add_triggers()
-    self.debug_U3(f"Triggers {self.triggers}")
   def terminate(self):
     for t in self.triggers: pass
   def add_triggers(self, triggers = []):
@@ -173,6 +154,28 @@ class U3(U3Base):
   @abstractmethod
   def cb_state(self, entity, attribute, old, new, kwargs):
     raise NotImplementedError
+# region Globals
+  def glob(self, attribute):
+    g = self.api.get_app('globals')
+    self.debug_U3(f"Global attribute {attribute}")
+    if g and attribute: return g.get(attribute)
+    elif g: return g
+    else: return None
+  @property
+  def areas(self):
+    return self.glob('areas')
+  @property
+  def default_namespace(self):
+    return self.glob('default_namespace')
+  @property
+  def keymap(self):
+    return self.glob('keymap')
+  @property
+  def insteon(self):
+    return self.glob('insteon')
+  @property
+  def ignore_events(self):
+    return self.glob('insteon').get('ignore_events')
 # endregion
 # region Callback Internals
   def add_time_trigger(self, trigger):
@@ -180,14 +183,14 @@ class U3(U3Base):
     interval = trigger.get('interval')
     if not interval: self.error(f"Time trigger: invalid interval {trigger}")
     else: handle = self.api.run_every(self.__cb_timer, start, interval)
-    if handle: self.triggers.append(type = T_TIMER, interval = interval, start = start, handle = handle)
+    if handle: self.triggers.append({'type': T_TIMER, 'interval': interval, 'start': start, 'handle': handle})
   def __cb_timer(self, data):
     self.cb_timer(data)    
 
   def add_event_trigger(self, data):
     event = data.pop('event', None)
     if event: handle = self.hass.listen_event(self.__cb_event, event = event, **data)
-    if handle: self.triggers.append(type = T_EVENT, handle = handle, data = data)
+    if handle: self.triggers.append({'type': T_EVENT, 'handle': handle, 'data': data})
     else: self.Error(f"Event trigger: invalid event {data}")
   def __cb_event(self, event, data, kwargs):
     data['event'] = event
@@ -199,20 +202,17 @@ class U3(U3Base):
     if topic:
       self.mqtt.mqtt_subscribe(topic)
       handle = self.mqtt.listen_event(callback = self.__cb_mqtt, event = EVENT_MQTT)
-      if handle: self.triggers.append(type = T_MQTT, topic = topic, data = data)
+      if handle: self.triggers.append({'type': T_MQTT, 'topic': topic, 'handle': handle, 'data': data})
     else: self.Error(f"MQTT trigger: invalid topic {topic}")
-
   def __cb_mqtt(self, event, data, kwargs):
     if data.get('wildcard'): data['topic'] = data.get('topic').replace(data.get('wildcard'),'')
     self.cb_mqtt(data)
 
   def add_state_trigger(self, data):
-    t = {}
     data['attribute'] = data.get('attribute','all')
     data['namespace'] = data.get('namespace', self.default_namespace)
-    t['type'] = T_STATE
-    t['handle'] = self.hass.listen_state(self.__cb_state, **data)
-    if t['handle']: self.triggers.append(t)
+    handle = self.hass.listen_state(self.__cb_state, **data)
+    if handle: self.triggers.append({'type': T_STATE, 'handle': handle, 'data': data})
     else: self.error("Trigger no bueno")
   def __cb_state(self, entity, attribute, old, new, kwargs):
     self.cb_state(entity, attribute, old, new, kwargs)
