@@ -47,7 +47,7 @@ class Universe(u3.U3Base):
   def get(self, attribute):
     if attribute == 'areas': return self.areas
     elif attribute == 'slugs': return self.slugs
-    elif attribute == 'default_namespace': return self.default_namespace
+    elif attribute in ['default_namespace','namespace']: return self.default_namespace
     elif attribute == 'insteon': return self.insteon
     elif attribute == 'buttonmap': return self.buttonmap
     else: return None
@@ -64,8 +64,6 @@ class Universe(u3.U3Base):
     keymap = {}
     keymap = self.args.get('keymap')
     bm = {}
-    # designators = self.args.get('designators')
-    # f designators: designators = [d.lower() for d in designators if d]
     for k,btns in keymap.items():
       if len(btns) != 8:
         self.Warn(f"Keypad {k}: len({btns}) == {len(btns)}")
