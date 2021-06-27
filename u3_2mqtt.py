@@ -63,6 +63,7 @@ class x2mqtt(u3.U3):
       return
     data['control'] = control
 
+    eparts = None
     if self.button:
       try:
         eparts = re.findall(self.button['regex'], entity_id)[0].split('_')

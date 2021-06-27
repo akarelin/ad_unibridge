@@ -46,7 +46,7 @@ class U3Base(ad.ADBase):
     self.api = self.get_ad_api()
     self.mqtt = self.get_plugin_api(self.args.get('default_mqtt_namespace','mqtt'))
     self.hass = self.get_plugin_api('deuce')
-    self.debug_U3(f"Namespaces:\n\tAPI: {self.api}\n\tMQTT => {self.args.get('default_mqtt_namespace','mqtt')} => {self.mqtt}\n\tHASS => deuce => {self.hass}")
+#    self.debug_U3(f"Namespaces:\n\tAPI: {self.api}\n\tMQTT => {self.args.get('default_mqtt_namespace','mqtt')} => {self.mqtt}\n\tHASS => deuce => {self.hass}")
 
   @property
   def default_namespace(self):
@@ -105,7 +105,7 @@ class U3(U3Base):
     return self.universe(attribute)
   def universe(self, attribute):
     g = self.api.get_app('universe')
-    self.debug_U3(f"Global attribute {attribute}")
+#    self.debug_U3(f"Global attribute {attribute}")
     if g and attribute: return g.get(attribute)
     elif g: return g
     else: return None
@@ -152,9 +152,25 @@ class U3(U3Base):
       handle = self.mqtt.listen_event(callback = self.__cb_mqtt, event = EVENT_MQTT)
       if handle: self.triggers.append({'type': T_MQTT, 'topic': topic, 'handle': handle, 'data': data})
     else: self.Error(f"MQTT trigger: invalid topic {topic}")
+  def MQTTCompare(self, subscription, topic):
+    sparts = subscription.split('/')
+    tparts = topic.split('/')
+    for i, s in enumerate(sparts):
+      if s == '#': return True
+      elif s == '+': continue
+      elif tparts[i] == s: continue
+      else: return False
+
   def __cb_mqtt(self, event, data, kwargs):
+    self.debug_U3(f"NQTT Callback. Event {event} Data {data} KWARGS {kwargs}")
     if data.get('wildcard'): data['topic'] = data.get('topic').replace(data.get('wildcard'),'')
-    self.cb_mqtt(data)
+    for t in self.triggers if t.type = T_MQTT:
+      s = t.topic
+      if self.MQTTCompare(s,data['topic']):
+        self.debug_U3(f"MQTT Event {data['topic']} matched {s}")
+        self.cb_mqtt(data)
+      else: 
+        self.debug_U3(f"MQTT Ignored {data['topic']} does not match {s}")
 
   def add_state_trigger(self, data):
     data['attribute'] = data.get('attribute','all')
