@@ -25,7 +25,7 @@ import pprint
         event: isy994_control
 """
 
-MQTT = "mqtt_trace"
+MQTT = "trace_mqtt"
 
 class x2mqtt(u3.U3):
   button = {}

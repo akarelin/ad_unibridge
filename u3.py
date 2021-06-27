@@ -45,7 +45,7 @@ class U3Base(ad.ADBase):
     self.__debug = self.args.get('debug')
     self.api = self.get_ad_api()
     self.mqtt = self.get_plugin_api(self.args.get('default_mqtt_namespace','mqtt'))
-    self.hass = self.get_plugin_api("deuce")
+    self.hass = self.get_plugin_api('deuce')
     self.debug_U3(f"Namespaces:\n\tAPI: {self.api}\n\tMQTT => {self.args.get('default_mqtt_namespace','mqtt')} => {self.mqtt}\n\tHASS => deuce => {self.hass}")
 
   @property
