@@ -6,7 +6,7 @@ import adapi as adapi
 from abc import ABC, abstractmethod
 import logging
 import json
-import traceback
+#import traceback
 
 from datetime import datetime, time
 # endregion
@@ -36,7 +36,7 @@ T_TIMER = 'timer'
 # endregion
 
 class U3Base(ad.ADBase):
-  api = None
+  api = None 
   mqtt = None
   hass = None
   __debug = False
@@ -44,9 +44,10 @@ class U3Base(ad.ADBase):
   def initialize(self):
     self.__debug = self.args.get('debug')
     self.api = self.get_ad_api()
-    self.mqtt = self.get_plugin_api(self.args.get('mqtt_namespace','mqtt'))
-    self.hass = self.get_plugin_api(self.default_namespace)
-    self.debug_U3(f"API Handles: {self.api} {self.mqtt} {self.hass}")
+    self.mqtt = self.get_plugin_api(self.args.get('default_mqtt_namespace','mqtt'))
+    self.hass = self.get_plugin_api("deuce")
+    self.debug_U3(f"Namespaces:\n\tAPI: {self.api}\n\tMQTT => {self.args.get('default_mqtt_namespace','mqtt')} => {self.mqtt}\n\tHASS => deuce => {self.hass}")
+
   @property
   def default_namespace(self):
     try: namespace = self.api.get_app('globals').default_namespace
@@ -55,6 +56,8 @@ class U3Base(ad.ADBase):
   def Warn(self, msg): self.__log(WARNING, msg)
   def Error(self, msg): self.__log(ERROR, msg)
   def Debug(self, msg): self.__log(DEBUG, msg)
+  def Trace(self, logger, msg):
+    self.api.log(msg = msg, level = DEBUG, log = logger)
   def debug_U3(self, msg): 
     if self.__debug: self.api.log(msg = msg, log = LOG_U3_DEBUG)
   def log_U3(self, msg): 
@@ -65,66 +68,9 @@ class U3Base(ad.ADBase):
     elif l in LOG_LEVELS_DEBUG and not self.__debug: return
     else: self.api.log(msg = msg, level = INFO if l in LOG_LEVELS_DEBUG else l, log = LOG_DEFAULT_DEBUG if l in LOG_LEVELS_DEBUG else LOG_DEFAULT)
 
-class Globals(U3Base):
-  default_namespace = None
-  areas = []
-  slugs = {}
-  keymap = {}
-  insteon = {}
-  ''' Example
-    creekview:
-      module: u3_combines
-      class: Globals
-      debug: True
-
-      default_namespace: deuce
-      areas: []
-      keymap:
-        kp/AO/AV:
-          - appletv
-          - htpc
-          - atlona
-          - 
-          - sonos
-          - pause
-          - speakers
-          - tv
-        kp/BBQ:
-          - 
-          - 
-          - 
-          - 
-          - 
-          - 
-          - 
-          - 
-      slugs:
-        entry: entry
-        stairs1: stairs/1
-      insteon:
-        ignore_events:
-        - RR
-        - OL
-        - ST
-    '''
-
-  def get(self, attribute):
-    if attribute == 'areas': return self.areas
-    elif attribute == 'slugs': return self.slugs
-    elif attribute == 'default_namespace': return self.default_namespace
-    elif attribute == 'insteon': return self.insteon
-    elif attribute == 'keymap': return self.keymap
-    else: return None
-  def initialize(self):
-    super().initialize()
-    self.default_namespace = self.args.get('default_namespace')
-    self.insteon = self.args.get('insteon')
-    self.slugs = [s.lower() for s in self.args.get('slugs')]
-    self.areas = [a.lower() for a in self.args.get('areas')]
-    self.keymap = self.args.get('keymap')
-
 class U3(U3Base):
   triggers = []
+  universe = None
   def initialize(self):
     super().initialize()
     self.add_triggers()
@@ -154,28 +100,30 @@ class U3(U3Base):
   @abstractmethod
   def cb_state(self, entity, attribute, old, new, kwargs):
     raise NotImplementedError
-# region Globals
-  def glob(self, attribute):
-    g = self.api.get_app('globals')
+# region Universe
+  def u(self, attribute):
+    return self.universe(attribute)
+  def universe(self, attribute):
+    g = self.api.get_app('universe')
     self.debug_U3(f"Global attribute {attribute}")
     if g and attribute: return g.get(attribute)
     elif g: return g
     else: return None
   @property
   def areas(self):
-    return self.glob('areas')
+    return self.u('areas')
   @property
   def default_namespace(self):
-    return self.glob('default_namespace')
+    return self.u('default_namespace')
   @property
-  def keymap(self):
-    return self.glob('keymap')
+  def butotnmap(self):
+    return self.u('buttonmap')
   @property
   def insteon(self):
-    return self.glob('insteon')
+    return self.u('insteon')
   @property
   def ignore_events(self):
-    return self.glob('insteon').get('ignore_events')
+    return self.u('insteon').get('ignore_events')
 # endregion
 # region Callback Internals
   def add_time_trigger(self, trigger):
