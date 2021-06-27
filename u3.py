@@ -55,7 +55,6 @@ class U3Base(ad.ADBase):
     self.api = self.get_ad_api()
     self.mqtt = self.get_plugin_api(self.args.get('default_mqtt_namespace','mqtt'))
     self.hass = self.get_plugin_api('deuce')
-#    self.debug_U3(f"Namespaces:\n\tAPI: {self.api}\n\tMQTT => {self.args.get('default_mqtt_namespace','mqtt')} => {self.mqtt}\n\tHASS => deuce => {self.hass}")
 
   @property
   def default_namespace(self):
@@ -114,7 +113,6 @@ class U3(U3Base):
     return self.universe(attribute)
   def universe(self, attribute):
     g = self.api.get_app('universe')
-#    self.debug_U3(f"Global attribute {attribute}")
     if g and attribute: return g.get(attribute)
     elif g: return g
     else: return None
