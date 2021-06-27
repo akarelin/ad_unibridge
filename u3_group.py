@@ -1,4 +1,4 @@
-import mqtt_device as MqttDevice
+import u3
 import json
 import datetime
 
@@ -21,97 +21,99 @@ colorloop:
 """
 
 # region Constants
-TYPE_Z2 = 'z2'
 TYPE_LIGHT = 'light'
 
 OFF = 'OFF'
 ON = 'ON'
 # endregion
 
-class dynamic(MqttDevice):
+class dynamic(u3.U3):
   members = []
+  state = None
+  topic = None
+  brightness = 127
 
   def initialize(self):
     super().initialize()
-
-    self._init_members()
-    self.debug("Members {}",self.members)
+    self.topic = self.args.get('topic')
+    self.AddMembers()
+    self.Debug(f"Members {self.members}")
     self.add_time_trigger({"interval": 60})
+    self.add_mqtt_trigger({"topic": self.topic})
 
-  def _init_members(self):
+  def AddMembers(self):
     ms = self.args.get('members')
     if not ms:
-      self.error("No members!")
+      self.Error("No members!")
       return
     member_count = len(ms)
     
     for i, m in enumerate(ms):
       member = {}
-      prefix = None
+#      prefix = None
+      namespace = None
+      domain = None
+      entity_id = None
       name = None
       if ':' in m:
-        prefix, name = m.split(':')
+        namespace, name = m.split(':')
       else:
-        name = m
-
-      if prefix in ['2','7','av','deuce','seven']:
-        member['type'] = TYPE_LIGHT
-        member['namespace'] = prefix
-        member['name'] = name
-        member['entity_id'] = "light."+name
+        namespace, name = self.u('namespace'),m
+      
+      if '.' in name:
+        domain, entity = name.split('.')
       else:
-        member['type'] = TYPE_Z2
-        member['name'] = name
-        if prefix not in ['Z2','z2','mqtt']: self.warn(f"Unknown type {m}")
-        member['topic'] = '/'.join(["z2mqtt",name,"set"])
+        domain, entity = ["light",name]
+    
+      member['type'] = TYPE_LIGHT
+      member['namespace'] = namespace
+      member['name'] = name
+      member['entity_id'] = '.'.join([domain, entity])
 
       member['angle'] = float(i*360/member_count)
       self.members.append(member)
 
 # region _set_group
-  def _set(self):
+  def cb_timer(self, data):
+    self.GroupUpdate()
+  def cb_mqtt(self, data):
+    payload = data.get('payload')
+    if payload: 
+      payload = payload.upper()
+      if payload in [ON,OFF]: 
+        self.state = payload
+        self.GroupUpdate()
+
+  def GroupUpdate(self):
     now = datetime.datetime.now()
     angle_offset = now.minute*6
 
     for m in self.members:
       if self.state == 'ON':
         angle = (angle_offset + m['angle'])%360
-        self._set_member(m, ON, brightness = self.brightness, hue = angle)
+        self.MemberUpdate(m, ON, brightness = self.brightness, hue = angle)
       if self.state == 'OFF':
-        self._set_member(m, OFF)
-    self.publish_state()
+        self.MemberUpdate(m, OFF)
+#    self.publish_state()
 # endregion    
 
 # region _set_member
-  def _set_member(self, member, cmd, brightness = 127, hue = None, saturation = 100):
+  def MemberUpdate(self, member, cmd, brightness = 127, hue = None, saturation = 100):
     try:
       t = member['type']
     except:
       self.error(f"Unknown member {member}")
       return
-# region Z2
-    if t == TYPE_Z2:
-      payload = {}
-      topic = member['topic']
-      if cmd == ON:
-        payload['state'] = 'ON'
-        payload['brightness'] = brightness
-        if hue:
-          payload['color'] = {"hue": hue, "saturation": saturation}
-      elif cmd == OFF: payload['state'] = 'OFF'
-      else: self.error("Unknown command {}", cmd)
-      self.mqtt.mqtt_publish(topic, json.dumps(payload))
-# endregion
 # region LIGHT   
-    elif t == TYPE_LIGHT:
+    if t == TYPE_LIGHT:
       e = None
       e = member['entity_id']
-      namespace = member.get('namespace')
+      namespace = member.get('namespace',self.u('namespace'))
       if cmd == ON:
         self.api.call_service("light/turn_on", entity_id = e, namespace = namespace, brightness = brightness, hs_color = [hue, saturation] if hue else None)
       elif cmd == OFF:
-        if self.get_state(e, namespace = namespace) != 'off':
-          self.api.call_service("light/turn_off", entity_id = e, namespace = namespace)
+#        if self.get_state(e, namespace = namespace) != 'off':
+        self.api.call_service("light/turn_off", entity_id = e, namespace = namespace)
 
 
       # if cmd == ON and hue:
