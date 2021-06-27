@@ -4,26 +4,28 @@ import datetime
 import re
 import pprint
 
+""" example
+  remapper:
+    module: 2mqtt
+    class: ToMQTT
+    debug: True
+    default_namespace: deuce
+
+    button:
+      regex: '^(?:sensor|light|switch)(?:\.btn_)(.+)$'
+      ignore_events:
+        - RR
+        - OL
+        - ST
+
+    sensor: '^(?:binary_)?sensor.(.+)?'
+
+    triggers:
+      - type: event
+        event: isy994_control
 """
-remapper:
-  module: 2mqtt
-  class: ToMQTT
-  debug: True
-  default_namespace: deuce
 
-  button:
-    regex: '^(?:sensor|light|switch)(?:\.btn_)(.+)$'
-    ignore_events:
-      - RR
-      - OL
-      - ST
-
-  sensor: '^(?:binary_)?sensor.(.+)?'
-
-  triggers:
-    - type: event
-      event: isy994_control
-"""
+MQTT = "mqtt_trace"
 
 class x2mqtt(u3.U3):
   button = {}
@@ -39,7 +41,7 @@ class x2mqtt(u3.U3):
     if self.sensor:
       if not self.sensor['regex']: self.Error(f"No sensor regex specified")
 
-    self.Debug(f"Initialized remapper {self.args}")
+    self.Debug(f"Initialized remapper {self.args}\n\tapi: {self.api}\n\tmqtt: {self.mqtt}\n\thass{self.hass}\n")
 
   def cb_mqtt(self, data):
     topic = data.pop('topic')
@@ -106,9 +108,15 @@ class x2mqtt(u3.U3):
 
   def I2Entity(self, data):
     topic = data.get('topic')
+    if not topic:
+      self.Trace(MQTT, f"No topic {topic}")
+      return
     payload = json.loads(data.get('payload'))
+    if not payload:
+      self.Trace(MQTT, f"No payload {data}")
+      return
     if payload.get('reason') not in ['device']: return
- 
+
     eparts = topic.split('/')
     eparts.remove('state')
     
@@ -135,41 +143,9 @@ class mqtt2x(u3.U3):
   def initialize(self):
     super().initialize()
     self.itype = self.args.get('type')
-    if self.itype == 'i2':
-      self.LoadKeymap()
-      self.add_mqtt_trigger({'topic':'insteon/#'})
-    elif self.itype == 'ind':
-      self.add_mqtt_trigger({'topic':'ind/#'})
-    else:
-      self.Error(f"Unknown indicator type {itype}")
-
-  def LoadKeymap(self):
-    bm = {}
-    designators = self.args.get('designators')
-    if designators: designators = [d.lower() for d in designators if d]
-    for k,btns in self.keymap.items():
-      if len(btns) != 8:
-        self.Warn(f"Keypad {k}: len({btns}) == {len(btns)}")
-        continue
-      keypad = k.lower().split('/')
-      base_topic = ['insteon']
-      base_topic += keypad
-      base_topic.append('set')
-      if 'kp' in keypad: keypad.remove('kp')
-      for i, indicator in enumerate(btns):
-        if not indicator: continue
-        topic = ['ind']
-        keypad_areas = list(set(keypad) & set(self.areas))
-        if len(keypad_areas) == 1: topic.append(keypad_areas[0])
-        elif len(keypad_areas) > 1:
-          self.Error(f"Keypad {keypad} has multiple areas {keypad_areas}")
-          continue
-        t1 = '/'.join(topic+[indicator.lower()])
-        t2 = '/'.join(base_topic+[str(i)])
-        if t1 in bm: bm[t1].append(t2)
-        else: bm[t1] = [t2]
-    self.Debug(pprint.pformat(bm))
-    self.buttonmap = bm
+    if self.itype == 'i2': self.add_mqtt_trigger({'topic':'insteon/#'})
+    elif self.itype == 'ind': self.add_mqtt_trigger({'topic':'ind/#'})
+    else: self.Error(f"Unknown indicator type {itype}")
 
   def cb_mqtt(self, data):
     topic = data.get('topic')
@@ -180,23 +156,19 @@ class mqtt2x(u3.U3):
     if value in ['ON','OFF']:
       if self.itype == 'i2': self.I2Indicator('ind/'+topic, value)
       elif self.itype == 'ind': self.ind2Indicator(eparts, value)
-    else: self.Warn(f"Unknown payload {payload}")
+    else: self.Debug(f"Unknown payload {payload}")
 
   def I2Indicator(self, topic, payload):
     topics = self.buttonmap.get(topic)
-    if topics:
-      for t in topics: 
-        self.mqtt.mqtt_publish(t, payload)
+    if topics: 
+      for t in topics: self.mqtt.mqtt_publish(t, payload)
     
   def ind2Indicator(self, eparts, data):
     entity = 'switch.ind_' + '_'.join(eparts)
     if self.hass.entity_exists(entity):
-      if payload == 'ON':
-        self.hass.turn_on(entity)
-      elif payload == 'OFF':
-        self.hass.turn_off(entity)
-    else:
-      self.Debug(f"Entity {entity} not found")
+      if payload == 'ON': self.hass.turn_on(entity)
+      elif payload == 'OFF': self.hass.turn_off(entity)
+    else: self.Debug(f"Entity {entity} not found")
 
 # region Legacy Code
 """
