@@ -26,6 +26,10 @@ import pprint
 """
 
 MQTT = "trace_mqtt"
+PREFIX_BUTTON = 'btn'
+PREFIX_INDICATOR = 'ind'
+PREFIX_SENSOR = 'sensor'
+PREFIX_POWER = 'power'
 
 class x2mqtt(u3.U3):
   button = {}
@@ -104,7 +108,7 @@ class x2mqtt(u3.U3):
         except: pass
 
   def PowerSensor(self, eparts, value):
-    topic = '/'.join(['pwr__']+eparts)
+    topic = '/'.join([PREFIX_POWER]+eparts)
     self.mqtt.mqtt_publish(topic, value)
 
   def I2Entity(self, data):
@@ -130,11 +134,11 @@ class x2mqtt(u3.U3):
 
   def Button(self, keypad, button, control):
     self.Debug(f"Button [{keypad}] -> [{button}]")
-    topic = '/'.join(['btn__',keypad,button])
+    topic = '/'.join([PREFIX_BUTTON,keypad,button])
     self.mqtt.mqtt_publish(topic, control)
 
   def Sensor(self, eparts, data):
-    topic = '/'.join(['snsr__']+eparts)
+    topic = '/'.join([PREFIX_SENSOR]+eparts)
     self.mqtt.mqtt_publish(topic, json.dumps(data))
 
 class mqtt2x(u3.U3):
