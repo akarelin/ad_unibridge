@@ -1,42 +1,5 @@
 import u3
 
-def MQTTCompare(subscription: str, topic: str) -> bool():
-  sparts = subscription.split('/')
-  tparts = topic.split('/')
-  for i, s in enumerate(sparts):
-    if s == '#': return True
-    elif s == '+': continue
-    elif tparts[i] == s: continue
-    else: return False
-
-class MqttTopic:
-  TP_TOPIC = 'topic'
-  TP_SINGLE = 'single'
-  TP_MULTI = 'multi'
-
-  types = ['topic','single','multi']
-  tparts = []
-  type = None
-  
-  def __init__(self, t = None):
-    if t:
-      self.tparts = t.split('/')
-      if len(tpart) <= 1:
-        return None
-      elif '#' in tparts:
-        self.type = TP_MULTI
-      elif '+' in tparts:
-        self.type = TP_SINGLE
-      else: self.type = TP_TOPIC
-  def __str__(tparts):
-    return self.topic()
-  def __add__(self, other):
-    return '/'.join(self, other)
-  @property
-  def topic(self) -> str:
-    if tparts: return tparts.join('/')
-    else: return None
-
 class MqttDevice(U3):
   unique_id = str
   name = str
