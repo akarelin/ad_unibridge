@@ -7,6 +7,7 @@ import adapi as adapi
 import logging
 import json
 import typing
+from typing import List, Dict, Optional
 from abc import ABC, abstractmethod
 from datetime import datetime, time
 # endregion
@@ -45,33 +46,31 @@ def MQTTCompare(subscription: str, topic: str) -> bool():
     else: return False
 
 class MqttTopic:
-  TP_TOPIC = 'topic'
-  TP_SINGLE = 'single'
-  TP_MULTI = 'multi'
-
-  types = ['topic','single','multi']
+#  TP_TOPIC = 'topic'
+#  TP_SINGLE = 'single'
+#  TP_MULTI = 'multi'
+#  types = ['topic','single','multi']
   tparts = []
-  type = None
   
-  def __init__(self, t = None):
+  def __init__(self, t = None, ignore_tparts: Optional[List] = None):
     if t:
-      self.tparts = t.split('/')
-      if len(tpart) <= 1:
-        return None
-      elif '#' in tparts:
-        self.type = TP_MULTI
-      elif '+' in tparts:
-        self.type = TP_SINGLE
-      else: self.type = TP_TOPIC
-  def __str__(tparts):
-    return self.topic()
+      tparts = t.split('/')
+      if ignore_tparts:
+        for i in ignore_tparts:
+          if i in tparts: continue
+      if len(tparts) <= 1: return None
+      self.tparts = tparts
+  def __str__(self):
+    return self.topic
   def __add__(self, other):
     return '/'.join(self, other)
   @property
+  def wildcard(self) -> bool:
+    return True if '#' in self.tparts or '+' in self.tparts else False
+  @property
   def topic(self) -> str:
-    if tparts: return tparts.join('/')
+    if self.tparts: return '/'.join(self.tparts)
     else: return None
-
 
 class U3Base(ad.ADBase):
   api = None 
@@ -151,7 +150,7 @@ class U3(U3Base):
   def default_namespace(self):
     return self.u('default_namespace')
   @property
-  def butotnmap(self):
+  def buttonmap(self):
     return self.u('buttonmap')
   @property
   def insteon(self):
@@ -180,24 +179,22 @@ class U3(U3Base):
     self.cb_event(data)
 
   def add_mqtt_trigger(self, data):
-    topic = data.pop('topic', None)
+    topic = data.get('topic')
     if topic:
       self.mqtt.mqtt_subscribe(topic)
-      handle = self.mqtt.listen_event(callback = self.__cb_mqtt, event = EVENT_MQTT)
+      handle = self.mqtt.listen_event(self.__cb_mqtt, EVENT_MQTT, wildcard = topic)
       if handle: self.triggers.append({'type': T_MQTT, 'topic': topic, 'handle': handle, 'data': data})
     else: self.Error(f"MQTT trigger: invalid topic {topic}")
   def __cb_mqtt(self, event, data, kwargs):
     self.debug_U3(f"NQTT Callback. Event {event} Data {data} KWARGS {kwargs}")
     topic = data.get('topic')
-    if data.get('wildcard'): data['topic'] = topic.replace(data.get('wildcard'),'')
     for t in self.triggers:
       if t.get('type') != T_MQTT: continue
       s = t.get('topic')
       if MQTTCompare(s,topic):
         self.debug_U3(f"MQTT Event {topic} matched {s}")
         self.cb_mqtt(data)
-      else: 
-        self.debug_U3(f"MQTT Ignored {data['topic']} does not match {s}")
+      else: self.debug_U3(f"MQTT Ignored {data} does not match {s}")
 
   def add_state_trigger(self, data):
     data['attribute'] = data.get('attribute','all')
