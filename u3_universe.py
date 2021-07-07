@@ -1,11 +1,49 @@
 import u3
 import pprint
+import inspect
+#import traceback
+#import sys
+import collections
+import voluptuous as vol
+
+BASE_SCHEMA = vol.Schema({
+    vol.Required("module"): str,
+    vol.Required("class"): str,
+    vol.Optional("dependencies"): list,
+    vol.Optional("plugin"): list,
+    vol.Optional("default_namespace"): str
+  },
+  extra=vol.ALLOW_EXTRA
+)
+
+INSTEON_SCHEMA = vol.Schema({
+  vol.Required("buttons"): dict,
+  vol.Optional("slugs"): dict,
+  vol.Required("ignore_events"): list
+})
+
+
+UNIVERSE_SCHEMA = BASE_SCHEMA.extend({
+  vol.Required("areas"): dict,
+  vol.Optional("insteon"): INSTEON_SCHEMA
+})
+
+def U(attribute: str):
+  stack = inspect.stack()[1:]
+  for s in stack:
+    try: this = s.frame.f_locals.get('self')
+    except: continue
+    if this.api: 
+      universe = this.api.get_app('universe')
+      if universe: return universe.config.get(attribute)
 
 class Universe(u3.U3Base):
-  default_namespace = None
-  areas = []
-  slugs = {}
-  insteon = {}
+#  default_namespace = None
+#  areas = {}
+  config = {}
+#  areas = []
+#  slugs = {}
+#  insteon = {}
   map_topic2action = {}
   keypad_topics = []
   ''' Example
@@ -45,26 +83,27 @@ class Universe(u3.U3Base):
         - ST
     '''
 
-  def get(self, attribute):
-    if attribute == 'areas': return self.areas
-    elif attribute == 'slugs': return self.slugs
-    elif attribute in ['default_namespace','namespace']: return self.default_namespace
-    elif attribute == 'insteon': return self.insteon
-    elif attribute == 'keypad_topics': return self.keypad_topics
-    elif attribute == 'map_topic2action': return self.map_topic2action
-    else: return None
-
   def initialize(self):
+    APP_SCHEMA = UNIVERSE_SCHEMA
     super().initialize()
-    self.default_namespace = self.args.get('default_namespace')
-    self.insteon = self.args.get('insteon')
-    self.slugs = [s.lower() for s in self.args.get('slugs')]
-    self.areas = [a.lower() for a in self.args.get('areas')]
-    self.LoadKeypads()
+    try: config = APP_SCHEMA(self.args)
+    except vol.Invalid as err: self.Error(f"Invalid config: {err}")
+#    self.default_namespace = config.pop('default_namespace')
+    config.pop('plugin')
+#    self.areas = config.pop('areas')
+    self.config = config
+
+  @property
+  def areas(self):
+    return self.config.get('areas')
+  @property
+  def default_namespace(self) -> str:
+    return self.config.get('default_namespace')
 
   def LoadKeypads(self):
     buttonmap = {}
-    buttonmap = self.args.get('button_map')
+#    buttonmap = self.args.get('button_map')
+    buttonmap = self.config.get('insteon').get('buttons')
     t2a = {}
     # Iterate through keypads
     for t, btns in buttonmap.items():
@@ -96,6 +135,49 @@ class Universe(u3.U3Base):
         t2a[topic] = action
     self.map_topic2action = t2a
 
+
+#  def get(self, property):
+#    return config.get(property)
+    # if attribute == 'areas': return self.areas
+    # elif attribute == 'slugs': return self.slugs
+    # elif attribute in ['default_namespace','namespace']: return self.default_namespace
+    # elif attribute == 'insteon': return self.insteon
+    # elif attribute == 'keypad_topics': return self.keypad_topics
+    # elif attribute == 'map_topic2action': return self.map_topic2action
+    # else: return None
+
+
+#    self.default_namespace = self.args.get('default_namespace')
+
+
+#    self.insteon = self.args.get('insteon')
+#    self.slugs = [s.lower() for s in self.args.get('slugs')]
+#    self.areas = [a.lower() for a in self.args.get('areas')]
+#    self.LoadKeypads()
+
+
+  # def u(self, attribute):
+  #   return self.universe(attribute)
+  # def universe(self, attribute):
+  #   g = self.api.get_app('universe')
+  #   if g and attribute: return g.get(attribute)
+  #   elif g: return g
+  #   else: return None
+  # @property
+  # def areas(self):
+  #   return self.u('areas')
+  # @property
+  # def default_namespace(self):
+  #   return self.u('default_namespace')
+  # @property
+  # def buttonmap(self):
+  #   return self.u('buttonmap')
+  # @property
+  # def insteon(self):
+  #   return self.u('insteon')
+  # @property
+  # def ignore_events(self):
+  #   return self.u('insteon').get('ignore_events')
 
   # def LoadKeymap(self):
   #   keymap = {}

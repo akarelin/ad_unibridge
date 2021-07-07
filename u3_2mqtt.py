@@ -1,6 +1,7 @@
 # region Imports and Constants
 import u3
 from u3 import MqttTopic
+from u3_universe import U
 import typing
 from typing import List, Dict
 import json
@@ -179,12 +180,25 @@ class button2event(u3.U3):
       elif trigger == 'mqtt':
         type = bconfig.get('type')
         if type == 'i2': 
-          for topic in self.u('keypad_topics'):
+          for topic in U('keypad_topics'):
             self.add_mqtt_trigger({'topic': topic})
         else: self.Error(f"Invalid type")
       else: self.Error(f"Invalid trigger")
     else: self.Error(f"No button specified")
-    return
+
+  def Action(self, data, type = 'event'):
+    # area = data.get('area')
+    # action = data.get('action')
+    # control = data.get('control')
+    # topic = data.get('topic')
+    # payload = {'action': action, 'area': area, 'path': topic, 'control': control}
+    p = { key: data[key] for key in ['area','action','control','topic'] }
+    if type == 'event': self.api.fire_event('ACTION', p)
+    elif type == 'mqtt': 
+      tparts = ['act']
+      if p.get('area'): tparts.append(p.get('area'))
+      tparts.append(p.get('action'))
+      self.mqtt.mqtt_publish('/'.join(tparts), p)
 
   def cb_event(self, data):
     data = isy_DataFromEvent(data, self.ignore_events)
@@ -202,11 +216,10 @@ class button2event(u3.U3):
     payload = data.get('payload')
     self.I2Button(topic, payload)
   def I2Button(self, topic, payload):
-    try: 
-      a = self.u('map_topic2action').get(topic)
-    except:
-      self.Debug(f"Exception for some reason")
+    try: a = U(self.universe,'map_topic2action').get(topic)
+    except: self.Debug(f"Exception for some reason")
     if not a: return
+
     action = a['action']
     area = a.get('area')
 
@@ -223,12 +236,12 @@ class button2event(u3.U3):
     delta = self.api.get_now_ts() - t
     if delta > 10: return
 
-    topic = 'act'
-    if area: topic = topic+'/'+area
-    if action: topic = topic+'/'+action
-    payload = control
-    self.mqtt.mqtt_publish(topic, payload)
-
+    a = {}
+    if area: a['area'] = area
+    if action: a['action'] = action
+    if control: a['control'] = control
+    if topic: a['topic'] = topic
+    if a: self.Action(a)
 
    # insteon/{keypad or device} =====> btn/{keypad}
   # Button is called from I2Entity

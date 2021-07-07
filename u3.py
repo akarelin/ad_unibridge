@@ -86,7 +86,7 @@ class U3Base(ad.ADBase):
 
   @property
   def default_namespace(self):
-    try: namespace = self.api.get_app('globals').default_namespace
+    try: namespace = self.api.get_app('universe').default_namespace
     except: namespace = 'default_namespace'
     return namespace
   def Warn(self, msg): self.__log(WARNING, msg)
@@ -109,6 +109,7 @@ class U3(U3Base):
   universe = None
   def initialize(self):
     super().initialize()
+    self.universe = self.api.get_app('universe')
     self.add_triggers()
   def terminate(self):
     for t in self.triggers: pass
@@ -123,7 +124,7 @@ class U3(U3Base):
         elif ttype == T_EVENT: self.add_event_trigger(t)
         elif ttype == T_STATE: self.add_state_trigger(t)
         elif ttype == T_TIMER: self.add_time_trigger(t)
-        else: self.error(f"Invalid trigger type {t}")
+        else: self.Error(f"Invalid trigger type {t}")
   @abstractmethod
   def cb_timer(self, data):
     raise NotImplementedError
@@ -136,33 +137,11 @@ class U3(U3Base):
   @abstractmethod
   def cb_state(self, entity, attribute, old, new, kwargs):
     raise NotImplementedError
-  def u(self, attribute):
-    return self.universe(attribute)
-  def universe(self, attribute):
-    g = self.api.get_app('universe')
-    if g and attribute: return g.get(attribute)
-    elif g: return g
-    else: return None
-  @property
-  def areas(self):
-    return self.u('areas')
-  @property
-  def default_namespace(self):
-    return self.u('default_namespace')
-  @property
-  def buttonmap(self):
-    return self.u('buttonmap')
-  @property
-  def insteon(self):
-    return self.u('insteon')
-  @property
-  def ignore_events(self):
-    return self.u('insteon').get('ignore_events')
 
-  def add_time_trigger(self, trigger):
-    start = trigger.get('start',"now")
-    interval = trigger.get('interval')
-    if not interval: self.error(f"Time trigger: invalid interval {trigger}")
+  def add_time_trigger(self, data):
+    start = data.get('start',"now")
+    interval = data.get('interval')
+    if not interval: self.error(f"Time trigger: invalid interval {data}")
     else: handle = self.api.run_every(self.__cb_timer, start, interval)
     if handle: self.triggers.append({'type': T_TIMER, 'interval': interval, 'start': start, 'handle': handle})
   def __cb_timer(self, data):
@@ -189,7 +168,9 @@ class U3(U3Base):
     self.debug_U3(f"NQTT Callback. Event {event} Data {data} KWARGS {kwargs}")
     topic = data.get('topic')
     for t in self.triggers:
-      if t.get('type') != T_MQTT: continue
+      if t.get('type') != T_MQTT: 
+        self.debug_U3(f"Not our callback {data}")
+        continue
       s = t.get('topic')
       if MQTTCompare(s,topic):
         self.debug_U3(f"MQTT Event {topic} matched {s}")

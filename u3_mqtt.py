@@ -1,5 +1,10 @@
 import u3
 
+# region Constants
+OFF = 'OFF'
+ON = 'ON'
+# endregion
+
 class MqttDevice(U3):
   unique_id = str
   name = str
@@ -55,11 +60,6 @@ class MqttDevice(U3):
     for dt in self.topic['disco']:
       topic = MqttTopic(f"{dt}/{self.unique_id}/config")
       self.mqtt.mqtt_publish(topic, self.disco_payload(topic) if not unpublish)
-
-# region Constants
-OFF = 'OFF'
-ON = 'ON'
-# endregion
 
 class MqttSwitch(MqttDevice):
   def initialize(self):
