@@ -7,9 +7,10 @@ import adapi as adapi
 import logging
 import json
 import typing
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from abc import ABC, abstractmethod
 from datetime import datetime, time
+import voluptuous as vol
 # endregion
 # region Constants
 EVENT_MQTT = 'MQTT_MESSAGE'
@@ -46,10 +47,6 @@ def MQTTCompare(subscription: str, topic: str) -> bool():
     else: return False
 
 class MqttTopic:
-#  TP_TOPIC = 'topic'
-#  TP_SINGLE = 'single'
-#  TP_MULTI = 'multi'
-#  types = ['topic','single','multi']
   tparts = []
   
   def __init__(self, t = None, ignore_tparts: Optional[List] = None):
@@ -77,18 +74,33 @@ class U3Base(ad.ADBase):
   mqtt = None
   hass = None
   __debug = False
+  
+  config = {}
+  SCHEMA = vol.Schema({
+        vol.Required("module"): str,
+        vol.Required("class"): str,
+        vol.Remove("dependencies"): any,
+        vol.Remove("plugin"): any,
+        vol.Optional("default_namespace"): str
+      },
+      extra=vol.ALLOW_EXTRA
+    )
 
   def initialize(self):
     self.__debug = self.args.get('debug')
     self.api = self.get_ad_api()
     self.mqtt = self.get_plugin_api(self.args.get('default_mqtt_namespace','mqtt'))
     self.hass = self.get_plugin_api('deuce')
+  def load(self, schema = {}):
+    if schema: self.SCHEMA = self.SCHEMA.extend(schema)
+    try: self.config=self.SCHEMA(self.args)
+    except: self.error(f"Invalid module configuration {self.args}")
 
+  def P(self, parameter: str):
+    return self.config.get(parameter)
   @property
   def default_namespace(self):
-    try: namespace = self.api.get_app('universe').default_namespace
-    except: namespace = 'default_namespace'
-    return namespace
+    return self.args.get('default_namespace','default_namespace')
   def Warn(self, msg): self.__log(WARNING, msg)
   def Error(self, msg): self.__log(ERROR, msg)
   def Debug(self, msg): self.__log(DEBUG, msg)
@@ -110,7 +122,8 @@ class U3(U3Base):
   def initialize(self):
     super().initialize()
     self.universe = self.api.get_app('universe')
-    self.add_triggers()
+  def load(self, schema = {}):
+    super().load(schema)
   def terminate(self):
     for t in self.triggers: pass
   def add_triggers(self, triggers = []):
@@ -148,18 +161,30 @@ class U3(U3Base):
     self.cb_timer(data)    
 
   def add_event_trigger(self, data):
-    event = data.pop('event', None)
-    if event: handle = self.hass.listen_event(self.__cb_event, event = event, **data)
+    event = data.pop('event')
+    if event: 
+      # handle = self.hass.listen_event(self.__cb_event, event = event) # was **data
+      # handle = self.api.listen_event(self.__cb_event, event = event)
+      # handle = self.hass.listen_event(self.__cb_event, event = event)
+      d = {'event': event, 'namespace': 'deuce'}
+      handle = self.hass.listen_event(self.__cb_event, d)
+      #handle = self.hass.listen_event(self.__cb_event, event, {"namespace": "deuce"})
+      # handle = self.listen_event(self.__cb_event, event = event)
+      # handle = self.hass.listen_event(self.__cb_event)
     if handle: self.triggers.append({'type': T_EVENT, 'handle': handle, 'data': data})
     else: self.Error(f"Event trigger: invalid event {data}")
   def __cb_event(self, event, data, kwargs):
+    if event in ['appd_started','state_changed']: return
     data['event'] = event
     self.debug_U3(f"Event Callback. Event {event} Data {data} KWARGS {kwargs}")
-    self.cb_event(data)
+    for t in self.triggers:
+      if t.get('type') != T_EVENT: continue
+      if t.get('event') == event: self.cb_event(data)
 
   def add_mqtt_trigger(self, data):
     topic = data.get('topic')
     if topic:
+      topic = topic.lower()
       self.mqtt.mqtt_subscribe(topic)
       handle = self.mqtt.listen_event(self.__cb_mqtt, EVENT_MQTT, wildcard = topic)
       if handle: self.triggers.append({'type': T_MQTT, 'topic': topic, 'handle': handle, 'data': data})

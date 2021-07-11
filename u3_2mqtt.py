@@ -4,6 +4,7 @@ from u3 import MqttTopic
 from u3_universe import U
 import typing
 from typing import List, Dict
+import voluptuous as vol
 import json
 import datetime
 import re
@@ -18,94 +19,73 @@ IND_TYPE_I2 = 'i2'
 IND_TYPE_INSTEON = 'insteon'
 # endregion
 
-""" example
-  remapper:
-    module: 2mqtt
-    class: ToMQTT
-    debug: True
-    default_namespace: deuce
+class x2y(u3.U3):
+  regex = None
+  transformer = None
+  trigger = None
 
-    button:
-      regex: '^(?:sensor|light|switch)(?:\.btn_)(.+)$'
-      ignore_events:
-        - RR
-        - OL
-        - ST
-
-    sensor: '^(?:binary_)?sensor.(.+)?'
-
-    triggers:
-      - type: event
-        event: isy994_control
-"""
-
-def isy_DataFromEvent(data, ignore_events = None):
-  event = data.pop('event')
-  entity = data.pop('entity_id')
-  if not event or event not in ['isy994_control']: return
-  if entity:
-    control = data.pop('control')
-    if control and control not in ignore_events: 
-      data['control'] = control
-      data['entity'] = entity
-      return data
-    # else: self.Debug(f"Ignoring control {control}")
-    # else: self.Warn(f"No entity_id in {data}")
-
-class sensor2mqtt(u3.U3):
-  """
-    isy_sensor_2mqtt:
-      module: u3_2mqtt
-      class: sensor2mqtt
-      dependencies: universe
-      debug: False
-      sensor:
-        regex: '^(?:binary_)?sensor.(.+)?'
-      triggers:
-        - type: event
-          event: isy994_control
-
-    power_switch_2mqtt:
-      module: u3_2mqtt
-      class: sensor2mqtt
-      dependencies: universe
-      debug: false
-      power_attributes:
-        - current_power_w
-        - power
-      triggers:
-        - type: state
-          entity: switch  
-  """
-  sensor_regex = None
-  sensor_attributes = []
-   
   def initialize(self):
     super().initialize()
-    sconfig = self.args.get('sensor')
-    if sconfig: 
-      trigger = sconfig.get('trigger')
-      if trigger == 'event': 
-        type = sconfig.get('type')
-        if type == 'isy994_event': 
-          regex = sconfig.get('regex')
-          if regex:
-            self.sensor_regex = regex
-            self.add_event_trigger({'event': 'isy994_control'})
-          else: self.Error(f"Invalid Regex")
-        else: self.Error(f"Invalid Type")
-      elif trigger == 'state':
-        type = sconfig.get('type')
-        if type == 'power': 
-          attributes = sconfig.get('attributes')
-          if attributes:
-            if isinstance(attributes,List): self.sensor_attributes = attributes
-            else: self.sensor_attributes = [attributes]
-            self.add_state_trigger({'entity': 'switch'})
-        else: self.Error(f"Invalid type")
-      else: self.Error(f"Invalid trigger")
-    else: self.Error(f"No sensor specified")
-     
+    schema_trigger = {
+      vol.Exclusive('event', "trigger"):{
+        vol.Required("event"): str,
+        vol.Required("regex"): str},
+      vol.Exclusive("mapping", "trigger"):{
+        vol.Required("mapping"): str},
+      vol.Exclusive("state", "trigger"):{
+        vol.Required("state"): str,
+      }}
+    schema_action = {
+      vol.Exclusive('transformer', 'action'):{vol.Required('transformer'): str}
+      }
+    super().load({**schema_trigger, **schema_action})
+    # region Triggers  
+    trigger = self.P('trigger')
+    if trigger: self.trigger = trigger
+    event = trigger.get('event')
+    topic = trigger.get('topic')
+    entity = trigger.get('entity')
+    if event: self.add_event_trigger({'event': event})
+    elif topic:
+      list = topic.get('list')
+      operand = topic.get('operand')
+      topics = []
+      if list and operand and operand == 'keys':
+        try: topics = U(list).keys()
+        except: self.Error(f"Invalid mapping {topic} got {U(list)}")
+      if topics:
+        self.trigger_topics = topics
+        head = trigger.get('head').split('/')
+        tail = trigger.get('tail').split('/')
+        for topic in topics: 
+          tparts = topic.split('/')
+          t = head + tparts + tail
+          self.add_mqtt_trigger({'topic': '/'.join(t)})
+    elif entity: self.add_state_trigger({'entity': entity})
+    # endregion
+    # region Actions
+    action = self.P('action')
+    self.transformer = action.get('transformer')
+    if not self.transformer: self.Error(f"Invalid action {action}")
+    # endregion
+
+  # region Events. Used by ISY
+  def cb_event(self, data):
+  #  if data.get('event') in ['state_changed','appd_started','call_service']: return
+    if data.get('event') not in ['isy994_control']: return
+    if self.transformer in ['ISY2Sensor','ISY2Action']:
+      data = isy_DataFromEvent(data, self.ignore_events)
+      eparts = []
+      entity = data.get('entity')
+      try: eparts = re.findall(self.button_regex, entity)[0].split('_')
+      except: return
+      if eparts: self.ISYButton(eparts, data)
+      # OR
+      data = isy_DataFromEvent(data)
+      self.ISYSensor(data)
+  def ISYButton(self, eparts, data):
+    tail = eparts.pop()
+    eparts.append(tail)
   def ISYSensor(self, data):
     entity = data.get('entity')
     eparts = []
@@ -118,19 +98,76 @@ class sensor2mqtt(u3.U3):
     d = {key: data[key] for key in extract}
     topic = '/'.join([PREFIX_SENSOR]+eparts)
     self.mqtt.mqtt_publish(topic, json.dumps(d))
-  def cb_event(self, data):
-    data = isy_DataFromEvent(data, self.ignore_events)
-    self.ISYSensor(data)
 
+  def isy_DataFromEvent(data):
+    INSTEON: Dict = U('insteon')
+    IGNORE_EVENTS: List = INSTEON.get('ignore_events')
+    event = data.pop('event')
+    entity = data.pop('entity_id')
+    if event not in ['isy994_control']: return
+    if entity:
+      control = data.pop('control')
+      if control and control not in ignore_events: 
+        data['control'] = control
+        data['entity'] = entity
+        return data
+  # endregion
+  # region MQTT. Used by I2.
+  def cb_mqtt(self, data):
+    topic = data.get('topic')
+    payload = data.get('payload')
+    if self.transformer == 'I2Action':
+      self.I2Action(topic, payload)
+  def I2TopicParser(self, topic) -> (str,str):
+    action = None
+    head = self.trigger.get('head').split('/')
+    tail = self.trigger.get('tail').split('/')
+    synonyms = self.universe.config.get('i2_keypad_synonyms')
+    REJECT = head + tail + ['kp','state']
+    tparts = [t for t in topic.split('/') if t not in REJECT]
+    area = tparts[0]
+    try: button = int(tparts.pop(-1))
+    except: self.Error(f"Unable to parse topic {topic}")
+    else:
+      path = '/'.join(tparts)
+      actions = self.universe.buttons2actions.get(path)
+      if actions: action = actions[button]
+    finally: return (path,action)
+  def I2PayloadParser(self, payload) -> str:
+    p = {}
+    try:
+      p = json.loads(payload)
+      reason = p.get('reason')
+      ts = p.get('timestamp')
+    except: return
+    if ts:
+      delta = self.api.get_now_ts() - ts
+      if delta > 10: return
+    if reason not in ['device']: return
+    control = ('F' if p.get('mode').upper() in ['FAST'] else "") + p.get('state')[:2].upper()
+    return control
+  def I2Action(self, topic, payload):
+    t,action = self.I2TopicParser(topic)
+    control = self.I2PayloadParser(payload)
+    if control: self.api.fire_event('ACTION', action = action, path = t, control = control)
+    t = 'act/'+t
+    self.mqtt.mqtt_publish(t, control)
+  # endregion
+  # region State. Used for power sensing
   def cb_state(self, entity, attribute, old, new, kwargs):
+    if self.transformer == 'Attribute2Sensor': self.Attribute2Sensor(entity, new)
+  def Attribute2Sensor(self, entity, state):
     value = 0.0
     eparts = []
-    eparts = entity.split('.')[1].split('_')    
-    if 'power' in eparts: eparts.remove('power')
-    attributes = {}
-    attributes = new.get('attributes')
-    for k,v in attributes.items():
-      if k in self.sensor_attributes:
+    eparts = entity.split('.')[1].split('_')
+    action = self.P('action')
+    dt = action.get('device_type')
+    attributes = action.get('attributes')
+    if dt == 'power':
+      if 'power' in eparts: eparts.remove('power')
+    if attributes:
+      values = [a for a in state.get('attributes') if a in attributes]
+      for v in values:
         try:
           value = float(v)
           topic = '/'.join([PREFIX_POWER]+eparts)
@@ -138,110 +175,33 @@ class sensor2mqtt(u3.U3):
           return
         except: pass
 
-class button2event(u3.U3):
-  """
-    button_isy_2event:
-      module: u3_2mqtt
-      class: button2event
-      dependencies: universe
-      debug: False
-      button:
-        regex: '^(?:sensor|light|switch)(?:\.btn_)(.+)$'
-      triggers:
-        - type: event
-          event: isy994_control
 
-    button_i2_2event:
-      module: u3_2mqtt
-      class: button2event
-      dependencies: universe
-      debug: False
+    # attributes = {}
+    # attributes = state.get('attributes')
+    # for k,v in attributes.items():
+    #   if k in self.sensor_attributes:
+    #     try:
+    #       value = float(v)
+    #       topic = '/'.join([PREFIX_POWER]+eparts)
+    #       self.mqtt.mqtt_publish(topic, value)
+    #       return
+    #     except: pass
+  # endregion
 
-      triggers:
-        - type: mqtt
-          topic: 'insteon/kp/#'
-  """
-  button_regex = None
-
-  def initialize(self):
-    super().initialize()
-    bconfig = self.args.get('button')
-    if bconfig: 
-      trigger = bconfig.get('trigger')
-      if trigger == 'event': 
-        type = bconfig.get('type')
-        if type == 'isy994_event': 
-          regex = bconfig.get('regex')
-          if regex:
-            self.button_regex = regex
-            self.add_event_trigger({'event': 'isy994_control'})
-          else: self.Error(f"Invalid Regex")
-        else: self.Error(f"Invalid Type")
-      elif trigger == 'mqtt':
-        type = bconfig.get('type')
-        if type == 'i2': 
-          for topic in U('keypad_topics'):
-            self.add_mqtt_trigger({'topic': topic})
-        else: self.Error(f"Invalid type")
-      else: self.Error(f"Invalid trigger")
-    else: self.Error(f"No button specified")
-
-  def Action(self, data, type = 'event'):
-    # area = data.get('area')
-    # action = data.get('action')
-    # control = data.get('control')
-    # topic = data.get('topic')
-    # payload = {'action': action, 'area': area, 'path': topic, 'control': control}
-    p = { key: data[key] for key in ['area','action','control','topic'] }
-    if type == 'event': self.api.fire_event('ACTION', p)
-    elif type == 'mqtt': 
-      tparts = ['act']
-      if p.get('area'): tparts.append(p.get('area'))
-      tparts.append(p.get('action'))
-      self.mqtt.mqtt_publish('/'.join(tparts), p)
-
-  def cb_event(self, data):
-    data = isy_DataFromEvent(data, self.ignore_events)
-    eparts = []
-    entity = data.get('entity')
-    try: eparts = re.findall(self.button_regex, entity)[0].split('_')
-    except: return
-    if eparts: self.ISYButton(eparts, data)
-  def ISYButton(self, eparts, data):
-    tail = eparts.pop()
-    eparts.append(tail)
-
-  def cb_mqtt(self, data):
-    topic = data.get('topic')
-    payload = data.get('payload')
-    self.I2Button(topic, payload)
-  def I2Button(self, topic, payload):
-    try: a = U(self.universe,'map_topic2action').get(topic)
-    except: self.Debug(f"Exception for some reason")
-    if not a: return
-
-    action = a['action']
-    area = a.get('area')
-
-    p = {}
-    reason = None
-    try:
-      p = json.loads(payload)
-      reason = p['reason']
-    except: return
-    if reason not in ['device']: return
-    control = ('F' if p['mode'].upper() in ['FAST'] else "") + p['state'][:2].upper()
-    
-    t = p['timestamp']
-    delta = self.api.get_now_ts() - t
-    if delta > 10: return
-
-    a = {}
-    if area: a['area'] = area
-    if action: a['action'] = action
-    if control: a['control'] = control
-    if topic: a['topic'] = topic
-    if a: self.Action(a)
+# region Junk
+  # def Action(self, data, type = 'event'):
+  #   # area = data.get('area')
+  #   # action = data.get('action')
+  #   # control = data.get('control')
+  #   # topic = data.get('topic')
+  #   # payload = {'action': action, 'area': area, 'path': topic, 'control': control}
+  #   p = { key: data[key] for key in ['area','action','control','topic'] }
+  #   if type == 'event': self.api.fire_event('ACTION', p)
+  #   elif type == 'mqtt': 
+  #     tparts = ['act']
+  #     if p.get('area'): tparts.append(p.get('area'))
+  #     tparts.append(p.get('action'))
+  #     self.mqtt.mqtt_publish('/'.join(tparts), p)
 
    # insteon/{keypad or device} =====> btn/{keypad}
   # Button is called from I2Entity
@@ -402,7 +362,7 @@ class button2event(u3.U3):
 #       if data == 'ON': self.hass.turn_on(entity)
 #       elif data == 'OFF': self.hass.turn_off(entity)
 #     else: self.Debug(f"Entity {entity} not found")
-
+# endregion
 # region Legacy Code
 """
 DEBUG = True
