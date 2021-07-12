@@ -115,7 +115,7 @@ class x2y(u3.U3):
       self.Warning(f"Invalid value {raw_value}")
       return
     tail = cp.get('tail')
-    eparts.pop(tail)
+    eparts.remove(tail)
     eparts.append(tail)
     topic = '/'.join([PREFIX_SENSOR]+eparts)
     self.mqtt.mqtt_publish(topic, value)
