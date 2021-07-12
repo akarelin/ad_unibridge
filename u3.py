@@ -90,7 +90,7 @@ class U3Base(ad.ADBase):
     self.__debug = self.args.get('debug')
     self.api = self.get_ad_api()
     self.mqtt = self.get_plugin_api(self.args.get('default_mqtt_namespace','mqtt'))
-    self.hass = self.get_plugin_api('deuce')
+    self.hass = self.get_plugin_api(self.args.get('default_namespace','deuce'))
   def load(self, schema = {}):
     if schema: self.SCHEMA = self.SCHEMA.extend(schema)
     try: self.config=self.SCHEMA(self.args)
@@ -118,8 +118,7 @@ class U3(U3Base):
   def initialize(self):
     super().initialize()
     self.universe = self.api.get_app('universe')
-  def load(self, schema = {}):
-    super().load(schema)
+  def load(self, schema = {}): super().load(schema)
   def terminate(self):
     for t in self.triggers: pass
   def add_triggers(self, triggers = []):
@@ -135,17 +134,13 @@ class U3(U3Base):
         elif ttype == T_TIMER: self.add_time_trigger(t)
         else: self.Error(f"Invalid trigger type {t}")
   @abstractmethod
-  def cb_timer(self, data):
-    raise NotImplementedError
+  def cb_timer(self, data): raise NotImplementedError
   @abstractmethod
-  def cb_event(self, data):
-    raise NotImplementedError
+  def cb_event(self, data): raise NotImplementedError
   @abstractmethod
-  def cb_mqtt(self, data):
-    raise NotImplementedError
+  def cb_mqtt(self, data): raise NotImplementedError
   @abstractmethod
-  def cb_state(self, entity, attribute, old, new, kwargs):
-    raise NotImplementedError
+  def cb_state(self, entity, attribute, old, new, kwargs): raise NotImplementedError
 
   def add_time_trigger(self, data):
     start = data.get('start',"now")
