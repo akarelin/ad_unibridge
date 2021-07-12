@@ -71,43 +71,63 @@ class x2y(u3.U3):
 
   # region Events. Used by ISY
   def cb_event(self, data):
-  #  if data.get('event') in ['state_changed','appd_started','call_service']: return
-    if data.get('event') not in ['isy994_control']: return
+    # if data.get('event') in ['state_changed','appd_started','call_service']: return
+    # if data.get('event') not in ['isy994_control']: return
     if self.transformer in ['ISY2Sensor','ISY2Action']:
-      data = isy_DataFromEvent(data, self.ignore_events)
+      data = self.ISYEventParser(data)
+      regex = self.P('trigger').get('regex')
       eparts = []
       entity = data.get('entity')
-      try: eparts = re.findall(self.button_regex, entity)[0].split('_')
+      try: eparts = re.findall(regex, entity)[0].split('_')
       except: return
-      if eparts: self.ISYButton(eparts, data)
-      # OR
-      data = isy_DataFromEvent(data)
-      self.ISYSensor(data)
+      if self.transformer == 'ISY2Sensor':
+        self.ISYSensor(eparts, data)
+      elif self.transformer == 'ISY2Action':
+        self.ISYButton(eparts, data)
   def ISYButton(self, eparts, data):
+    # 2DO
     tail = eparts.pop()
     eparts.append(tail)
-  def ISYSensor(self, data):
-    entity = data.get('entity')
-    eparts = []
-    try: eparts = re.findall(self.sensor_regex, entity)[0].split('_')
-    except: return
+  def ISYSensor(self, eparts, data):
+    nameparts = U('isy_nameparts')
+    controls = U('isy_sensor_controls')
     tail = eparts.pop()
     tail = tail[1] if tail in ['s1','s2'] else '' if tail in ['s','sensor'] else tail
     eparts.append(tail)
-    extract = ['control','value','uom']
-    d = {key: data[key] for key in extract}
+    control = data.pop('control')
+    raw_value = data.pop('value')
+    extras = data
+    cp = controls.get(control)
+    value = None
+    if not cp:
+      self.Error(f"Unknown control {control} or its parameters {controls}")
+      return
+    value_type = cp.get('type','str')
+    try: 
+      if value_type == 'float': v = float(raw_value)
+      elif value_type == 'int': v = int(raw_value)
+      else: v = raw_value
+      if value_type == 'float':
+        v = v*float(cp.get(value_multiplier))
+      elif value_type == 'int':
+        v = int(v*float(cp.get(value_multiplier)))
+    except:
+      self.Warning(f"Invalid value {raw_value}")
+      return
+    tail = cp.get('tail')
+    eparts.pop(tail)
+    eparts.append(tail)
     topic = '/'.join([PREFIX_SENSOR]+eparts)
-    self.mqtt.mqtt_publish(topic, json.dumps(d))
+    self.mqtt.mqtt_publish(topic, value)
 
-  def isy_DataFromEvent(data):
-    INSTEON: Dict = U('insteon')
-    IGNORE_EVENTS: List = INSTEON.get('ignore_events')
+  def ISYEventParser(self, data):
+    IGNORE: List = ['RR','OR','ST']
     event = data.pop('event')
     entity = data.pop('entity_id')
     if event not in ['isy994_control']: return
     if entity:
       control = data.pop('control')
-      if control and control not in ignore_events: 
+      if control and control not in IGNORE:
         data['control'] = control
         data['entity'] = entity
         return data
@@ -131,7 +151,7 @@ class x2y(u3.U3):
     else:
       path = '/'.join(tparts)
       actions = self.universe.buttons2actions.get(path)
-      if actions: action = actions[button]
+      if actions: action = actions[button-1]
     finally: return (path,action)
   def I2PayloadParser(self, payload) -> str:
     p = {}
@@ -149,31 +169,31 @@ class x2y(u3.U3):
   def I2Action(self, topic, payload):
     t,action = self.I2TopicParser(topic)
     control = self.I2PayloadParser(payload)
-    if control: self.api.fire_event('ACTION', action = action, path = t, control = control)
-    t = 'act/'+t
-    self.mqtt.mqtt_publish(t, control)
+    if control: 
+      self.api.fire_event('ACTION', action = action, path = t, control = control)
+      t = 'act/'+t
+      self.mqtt.mqtt_publish(t, control)
   # endregion
   # region State. Used for power sensing
   def cb_state(self, entity, attribute, old, new, kwargs):
     if self.transformer == 'Attribute2Sensor': self.Attribute2Sensor(entity, new)
   def Attribute2Sensor(self, entity, state):
-    value = 0.0
+    action = self.P('action')
+    action_attrs = action.get('attributes')
+    attrs = state.get('attributes')
+    dt = action.get('device_type')
     eparts = []
     eparts = entity.split('.')[1].split('_')
-    action = self.P('action')
-    dt = action.get('device_type')
-    attributes = action.get('attributes')
+
     if dt == 'power':
       if 'power' in eparts: eparts.remove('power')
-    if attributes:
-      values = [a for a in state.get('attributes') if a in attributes]
-      for v in values:
+      topic = '/'.join([PREFIX_POWER]+eparts)
+      for a in [attrs.get(a) for a in attrs if a in action_attrs]:
         try:
-          value = float(v)
-          topic = '/'.join([PREFIX_POWER]+eparts)
-          self.mqtt.mqtt_publish(topic, value)
+          self.mqtt.mqtt_publish(topic, float(a))
           return
-        except: pass
+        except: continue
+
 
 
     # attributes = {}
