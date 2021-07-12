@@ -96,20 +96,16 @@ class U3Base(ad.ADBase):
     try: self.config=self.SCHEMA(self.args)
     except: self.error(f"Invalid module configuration {self.args}")
 
-  def P(self, parameter: str):
-    return self.config.get(parameter)
+  def P(self, parameter: str): return self.config.get(parameter)
   @property
-  def default_namespace(self):
-    return self.args.get('default_namespace','default_namespace')
+  def default_namespace(self): return self.args.get('default_namespace','default')
   def Warn(self, msg): self.__log(WARNING, msg)
   def Error(self, msg): self.__log(ERROR, msg)
   def Debug(self, msg): self.__log(DEBUG, msg)
-  def Trace(self, logger, msg):
-    self.api.log(msg = msg, level = DEBUG, log = logger)
+  def Trace(self, logger, msg): self.api.log(msg = msg, level = DEBUG, log = logger)
   def debug_U3(self, msg): 
     if self.__debug: self.api.log(msg = msg, log = LOG_U3_DEBUG)
-  def log_U3(self, msg): 
-    self.api.log(msg = msg, log = LOG_U3)
+  def log_U3(self, msg): self.api.log(msg = msg, log = LOG_U3)
   def __log(self, level, msg):
     l = level.upper()
     if l not in LOG_LEVELS: self.log_U3(f"Invalid log level {l}")
@@ -162,24 +158,13 @@ class U3(U3Base):
 
   def add_event_trigger(self, data):
     event = data.pop('event')
-    if event: 
-      # handle = self.hass.listen_event(self.__cb_event, event = event) # was **data
-      # handle = self.api.listen_event(self.__cb_event, event = event)
-      # handle = self.hass.listen_event(self.__cb_event, event = event)
-      d = {'event': event, 'namespace': 'deuce'}
-      handle = self.hass.listen_event(self.__cb_event, d)
-      #handle = self.hass.listen_event(self.__cb_event, event, {"namespace": "deuce"})
-      # handle = self.listen_event(self.__cb_event, event = event)
-      # handle = self.hass.listen_event(self.__cb_event)
-    if handle: self.triggers.append({'type': T_EVENT, 'handle': handle, 'data': data})
+    if event: handle = self.hass.listen_event(self.__cb_event, event = event, **data)
+    if handle: self.triggers.append({'type': T_EVENT, 'handle': handle, 'event': event, 'data': data})
     else: self.Error(f"Event trigger: invalid event {data}")
   def __cb_event(self, event, data, kwargs):
-    if event in ['appd_started','state_changed']: return
     data['event'] = event
     self.debug_U3(f"Event Callback. Event {event} Data {data} KWARGS {kwargs}")
-    for t in self.triggers:
-      if t.get('type') != T_EVENT: continue
-      if t.get('event') == event: self.cb_event(data)
+    if [t for t in self.triggers if t.get('type') == T_EVENT]: self.cb_event(data)
 
   def add_mqtt_trigger(self, data):
     topic = data.get('topic')
@@ -192,15 +177,12 @@ class U3(U3Base):
   def __cb_mqtt(self, event, data, kwargs):
     self.debug_U3(f"NQTT Callback. Event {event} Data {data} KWARGS {kwargs}")
     topic = data.get('topic')
-    for t in self.triggers:
-      if t.get('type') != T_MQTT: 
-        self.debug_U3(f"Not our callback {data}")
-        continue
-      s = t.get('topic')
-      if MQTTCompare(s,topic):
-        self.debug_U3(f"MQTT Event {topic} matched {s}")
-        self.cb_mqtt(data)
-      else: self.debug_U3(f"MQTT Ignored {data} does not match {s}")
+    if [t for t in self.triggers if t.get('type') == T_MQTT]: self.cb_mqtt(data)
+      # s = t.get('topic')
+      # if MQTTCompare(s,topic):
+      #  self.debug_U3(f"MQTT Event {topic} matched {s}")
+      #  self.cb_mqtt(data)
+      # else: self.debug_U3(f"MQTT Ignored {data} does not match {s}")
 
   def add_state_trigger(self, data):
     data['attribute'] = data.get('attribute','all')
