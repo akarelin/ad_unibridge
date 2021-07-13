@@ -35,18 +35,12 @@ class Creekview(u3.Universe):
   def LoadKeypads(self):
     synonyms = {k: v.split('/') for k,v in self._lower('i2_keypad_synonyms').items()}
     keypads = self._lower('i2_keypads')
-
     for keypad,buttons in keypads.items():
-      tparts = []
-      for part in [p for p in keypad.split('/') if p not in ['kp']]:
-        s = synonyms.get(keypad)
-        if isinstance(s,list): tparts = [*tparts, *s]
-        else: tparts.append(part)
-      area = tparts[0]
-      if area in self.areas.keys():
-        if len(buttons) == 8: self.buttons2actions['/'.join(tparts)] = buttons
-        else: self.Warn(f"Keypad {keypad}: len({buttons}) == {len(buttons)}")
-      else: self.Warn(f"Keypad {keypad}: Unknown area {area}")
+      if len(buttons) == 8:
+        self.buttons2actions[keypad] = buttons
+        synonym = synonyms.get(keypad)
+        if synonym: self.button2actions[synonym] = buttons
+      else: self.Warn(f"Keypad {keypad}: len({buttons}) == {len(buttons)}")
 
 class x2y(u3.U3):
   regex = None
@@ -163,23 +157,25 @@ class x2y(u3.U3):
     payload = data.get('payload')
     if self.transformer == 'I2Action':
       self.I2Action(topic, payload)
+  def I2Action(self, topic, payload):
+    control = self.I2PayloadParser(payload)
+    if control: 
+      t,action = self.I2TopicParser(topic)
+      self.api.fire_event('ACTION', action = action, path = t, control = control)
+      t = 'act/'+t
+      self.mqtt.mqtt_publish(t, control)
   def I2TopicParser(self, topic) -> (str,str):
     action = None
-    head = self.trigger.get('head').split('/')
-    tail = self.trigger.get('tail').split('/')
-    synonyms = self.universe.config.get('i2_keypad_synonyms')
-    REJECT = head + tail + ['kp','state']
-    tparts = [t for t in topic.split('/') if t not in REJECT]
+    tparts = [t for t in topic.split('/') if t not in ['kp','insteon','state']]
     area = tparts[0]
     if tparts[-1] in ['1','2','3','4','5','6','7','8']:
       try: button = int(tparts.pop(-1))
-      except: self.Error(f"Unable to parse topic {topic}")
-      else:
-        path = '/'.join(tparts)
-        actions = self.universe.buttons2actions.get(path)
-        if actions: action = actions[button-1]
-    else: path = '/'.join(tparts)
-    return (path,action)
+      except: pass
+      path = '/'.join(tparts)
+      actions = self.universe.buttons2actions.get(topic)
+      if actions: action = actions[button-1]
+      return (path,action)
+    else: return (topic, None)
   def I2PayloadParser(self, payload) -> str:
     p = {}
     try:
@@ -193,13 +189,6 @@ class x2y(u3.U3):
     if reason not in ['device']: return
     control = ('F' if p.get('mode').upper() in ['FAST'] else "") + p.get('state')[:2].upper()
     return control
-  def I2Action(self, topic, payload):
-    t,action = self.I2TopicParser(topic)
-    control = self.I2PayloadParser(payload)
-    if control: 
-      self.api.fire_event('ACTION', action = action, path = t, control = control)
-      t = 'act/'+t
-      self.mqtt.mqtt_publish(t, control)
   # endregion
   # region State. Used for power sensing
   def cb_state(self, entity, attribute, old, new, kwargs):
