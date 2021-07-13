@@ -115,7 +115,7 @@ class x2y(u3.U3):
       self.Warning(f"Invalid value {raw_value}")
       return
     tail = cp.get('tail')
-    eparts.remove(tail)
+    if tail in eparts: eparts.remove(tail)
     eparts.append(tail)
     topic = '/'.join([PREFIX_SENSOR]+eparts)
     self.mqtt.mqtt_publish(topic, value)
@@ -152,7 +152,7 @@ class x2y(u3.U3):
       path = '/'.join(tparts)
       actions = self.universe.buttons2actions.get(path)
       if actions: action = actions[button-1]
-    finally: return (path,action)
+      return (path,action)
   def I2PayloadParser(self, payload) -> str:
     p = {}
     try:
