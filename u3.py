@@ -7,7 +7,9 @@ import adapi as adapi
 import logging
 import json
 import typing
-from typing import List, Dict, Optional, Any
+import pprint
+import inspect
+from typing import List, Dict, Optional, Any, Callable, cast
 from abc import ABC, abstractmethod
 from datetime import datetime, time
 import voluptuous as vol
@@ -74,8 +76,7 @@ class U3Base(ad.ADBase):
   mqtt = None
   hass = None
   __debug = False
-  
-  config = {}
+  __config = {}
   SCHEMA = vol.Schema({
         vol.Required("module"): str,
         vol.Required("class"): str,
@@ -89,16 +90,21 @@ class U3Base(ad.ADBase):
   def initialize(self):
     self.__debug = self.args.get('debug')
     self.api = self.get_ad_api()
-    self.mqtt = self.get_plugin_api(self.args.get('default_mqtt_namespace','mqtt'))
-    self.hass = self.get_plugin_api(self.args.get('default_namespace','deuce'))
+    self.mqtt = self.get_plugin_api(self.default_mqtt_namespace)
+    self.hass = self.get_plugin_api(self.default_namespace)
+  def terminate(self): pass
   def load(self, schema = {}):
     if schema: self.SCHEMA = self.SCHEMA.extend(schema)
-    try: self.config=self.SCHEMA(self.args)
+    try: self.__config=self.SCHEMA(self.args)
     except: self.error(f"Invalid module configuration {self.args}")
-
-  def P(self, parameter: str): return self.config.get(parameter)
+  
   @property
-  def default_namespace(self): return self.args.get('default_namespace','default')
+  def default_namespace(self): return self.config.get('default_namespace')
+  @property
+  def default_mqtt_namespace(self): return self.config.get('default_mqtt_namespace')
+  @abstractmethod
+  def U(self, attribute: str): raise NotImplementedError
+  def P(self, parameter: str): return self.__config.get(parameter)
   def Warn(self, msg): self.__log(WARNING, msg)
   def Error(self, msg): self.__log(ERROR, msg)
   def Debug(self, msg): self.__log(DEBUG, msg)
@@ -117,10 +123,19 @@ class U3(U3Base):
   universe = None
   def initialize(self):
     super().initialize()
-    self.universe = self.api.get_app('universe')
+    for dep in [d for d in [self.args.get('global_dependencies'), self.args.get('dependencies')] if d]:
+      try: self.universe = self.api.get_app(dep)
+      except: continue
+      else: break
+    if not self.universe: self.Error(f"Unable to connect to the universe {self.args}")
   def load(self, schema = {}): super().load(schema)
   def terminate(self):
     for t in self.triggers: pass
+  def U(self, attribute: str):
+    try: value = self.universe.P(attribute)
+    except: value = None
+    return value
+
   def add_triggers(self, triggers = []):
     if not triggers: triggers = self.args.get('triggers')
     if triggers: 
@@ -148,8 +163,7 @@ class U3(U3Base):
     if not interval: self.error(f"Time trigger: invalid interval {data}")
     else: handle = self.api.run_every(self.__cb_timer, start, interval)
     if handle: self.triggers.append({'type': T_TIMER, 'interval': interval, 'start': start, 'handle': handle})
-  def __cb_timer(self, data):
-    self.cb_timer(data)    
+  def __cb_timer(self, data): self.cb_timer(data)    
 
   def add_event_trigger(self, data):
     event = data.pop('event')
@@ -173,11 +187,6 @@ class U3(U3Base):
     self.debug_U3(f"NQTT Callback. Event {event} Data {data} KWARGS {kwargs}")
     topic = data.get('topic')
     if [t for t in self.triggers if t.get('type') == T_MQTT]: self.cb_mqtt(data)
-      # s = t.get('topic')
-      # if MQTTCompare(s,topic):
-      #  self.debug_U3(f"MQTT Event {topic} matched {s}")
-      #  self.cb_mqtt(data)
-      # else: self.debug_U3(f"MQTT Ignored {data} does not match {s}")
 
   def add_state_trigger(self, data):
     data['attribute'] = data.get('attribute','all')
@@ -185,7 +194,22 @@ class U3(U3Base):
     handle = self.hass.listen_state(self.__cb_state, **data)
     if handle: self.triggers.append({'type': T_STATE, 'handle': handle, 'data': data})
     else: self.error("Trigger no bueno")
-  def __cb_state(self, entity, attribute, old, new, kwargs):
-    self.cb_state(entity, attribute, old, new, kwargs)
-# endregion
+  def __cb_state(self, entity, attribute, old, new, kwargs): self.cb_state(entity, attribute, old, new, kwargs)
 
+class Universe(U3Base):
+  def initialize(self):
+    super().initialize()
+    super().load({
+        vol.Required("areas"): dict
+      })
+  def terminate(self): super().terminate()
+
+  def _lower(self, attribute):
+    try: result = {k.lower(): v for k,v in self.P(attribute).items()}
+    except: pass
+    else: return result
+
+  @property
+  def areas(self) -> list: return {k.lower(): v for k,v in self.P('areas').items()}
+  @property
+  def Areas(self) -> list: return self.P('areas')
