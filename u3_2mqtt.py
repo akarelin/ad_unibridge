@@ -71,8 +71,6 @@ class x2y(u3.U3):
 
   # region Events. Used by ISY
   def cb_event(self, data):
-    # if data.get('event') in ['state_changed','appd_started','call_service']: return
-    # if data.get('event') not in ['isy994_control']: return
     if self.transformer in ['ISY2Sensor','ISY2Action']:
       data = self.ISYEventParser(data)
       regex = self.P('trigger').get('regex')
@@ -80,10 +78,8 @@ class x2y(u3.U3):
       entity = data.get('entity')
       try: eparts = re.findall(regex, entity)[0].split('_')
       except: return
-      if self.transformer == 'ISY2Sensor':
-        self.ISYSensor(eparts, data)
-      elif self.transformer == 'ISY2Action':
-        self.ISYButton(eparts, data)
+      if self.transformer == 'ISY2Sensor': self.ISYSensor(eparts, data)
+      elif self.transformer == 'ISY2Action': self.ISYButton(eparts, data)
   def ISYButton(self, eparts, data):
     # 2DO
     tail = eparts.pop()
@@ -146,13 +142,16 @@ class x2y(u3.U3):
     REJECT = head + tail + ['kp','state']
     tparts = [t for t in topic.split('/') if t not in REJECT]
     area = tparts[0]
-    try: button = int(tparts.pop(-1))
-    except: self.Error(f"Unable to parse topic {topic}")
-    else:
-      path = '/'.join(tparts)
-      actions = self.universe.buttons2actions.get(path)
-      if actions: action = actions[button-1]
-      return (path,action)
+    if tparts[-1] in ['1','2','3','4','5','6','7','8']:
+      try: button = int(tparts.pop(-1))
+      except: self.Error(f"Unable to parse topic {topic}")
+      else:
+        path = '/'.join(tparts)
+        actions = self.universe.buttons2actions.get(path)
+        if actions: action = actions[button-1]
+    else: path = '/'.join(tparts)
+    return (path,action)
+
   def I2PayloadParser(self, payload) -> str:
     p = {}
     try:
