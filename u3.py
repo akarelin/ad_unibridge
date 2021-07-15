@@ -39,38 +39,6 @@ T_EVENT = 'event'
 T_TIMER = 'timer'
 # endregion
 
-def MQTTCompare(subscription: str, topic: str) -> bool():
-  sparts = subscription.split('/')
-  tparts = topic.split('/')
-  for i, s in enumerate(sparts):
-    if s == '#': return True
-    elif s == '+': continue
-    elif tparts[i] == s: continue
-    else: return False
-
-class MqttTopic:
-  tparts = []
-  
-  def __init__(self, t = None, ignore_tparts: Optional[List] = None):
-    if t:
-      tparts = t.split('/')
-      if ignore_tparts:
-        for i in ignore_tparts:
-          if i in tparts: continue
-      if len(tparts) <= 1: return None
-      self.tparts = tparts
-  def __str__(self):
-    return self.topic
-  def __add__(self, other):
-    return '/'.join(self, other)
-  @property
-  def wildcard(self) -> bool:
-    return True if '#' in self.tparts or '+' in self.tparts else False
-  @property
-  def topic(self) -> str:
-    if self.tparts: return '/'.join(self.tparts)
-    else: return None
-
 class U3Base(ad.ADBase):
   api = None 
   mqtt = None
@@ -80,7 +48,6 @@ class U3Base(ad.ADBase):
   SCHEMA = vol.Schema({
         vol.Required("module"): str,
         vol.Required("class"): str,
-        vol.Remove("dependencies"): any,
         vol.Remove("plugin"): any,
         vol.Optional("default_namespace"): str
       },
@@ -92,6 +59,7 @@ class U3Base(ad.ADBase):
     self.api = self.get_ad_api()
     self.mqtt = self.get_plugin_api(self.default_mqtt_namespace)
     self.hass = self.get_plugin_api(self.default_namespace)
+    self.__config = self.args
   def terminate(self): pass
   def load(self, schema = {}):
     if schema: self.SCHEMA = self.SCHEMA.extend(schema)
@@ -104,7 +72,7 @@ class U3Base(ad.ADBase):
   def default_mqtt_namespace(self): return self.config.get('default_mqtt_namespace')
   @abstractmethod
   def U(self, attribute: str): raise NotImplementedError
-  def P(self, parameter: str): return self.__config.get(parameter)
+  def P(self, parameter: str): return self.args.get(parameter)
   def Warn(self, msg): self.__log(WARNING, msg)
   def Error(self, msg): self.__log(ERROR, msg)
   def Debug(self, msg): self.__log(DEBUG, msg)
