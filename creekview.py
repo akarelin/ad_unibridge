@@ -26,8 +26,10 @@ IND_TYPE_INSTEON = 'insteon'
 
 class Creekview(u3.Universe):
   synonyms = {}
-  isy_actions = {}
-  i2_actions = {}
+  keypads_isy = {}
+  keypads_i2 = {}
+  buttons_isy = {}
+  areamap = {}
 
   def initialize(self):
     super().initialize()
@@ -36,25 +38,66 @@ class Creekview(u3.Universe):
         vol.Optional("isy_slugs"): dict
       }
     super().load(schema)
+    self.LoadAreas()
     self.LoadKeypads()
+    self.LoadEntities()
   def terminate(self): super().terminate()
 
+  def LoadAreas(self): 
+    am = self.p('areamap')
+    for area,area_synonym in am.items():
+      if isinstance(area_synonym, str): self.areamap[area] = area_synonym
+      elif isinstance(area_synonym, dict):
+        subsyn = {k: f"{area}/{v}" if v else f"{area}/{k}" for k,v in area_synonym.items()}
+        for subarea,synonym in subsyn.items(): self.areamap[subarea] = synonym
+  
   def LoadKeypads(self):
-    i2 = {v.lower(): k for k,v in self._lower('i2_keypad_synonyms').items()}
-    isy = {v.lower(): k for k,v in self._lower('isy_keypad_synonyms').items()}
-    
-    for keypad,actions in self._lower('keypad_actions').items():
-      # actions = [a for a in actions if a]
-      slug = isy.get(keypad)
-      if slug: 
-        for a in [a for a in actions if a]:
-          entity_id = f"btn_{a.replace('-','_').lower()}_{slug}"
-          self.isy_actions[entity_id] = a
-        continue
-      else:
-        self.i2_actions[keypad] = actions
-        synonym = i2.get(keypad)
-        if synonym: self.i2_actions[synonym] = actions
+    keypads = self.p('keypads')
+    for k in keypads:
+      path = k.get('path')
+      area = path.split('/')[0]
+      tail = k.get('tail')
+      if tail: self.keypads_isy[tail] = {'area': area, 'path': path, 'button_map': k.get('button_map')}
+      else: self.keypads_i2[path] = {'area': area, 'buttons': k.get('buttons')}
+    return
+
+  def LoadEntities(self):
+    for d in ['light','sensor']:
+      for e in self.hass.get_state(d):
+        entity = e.split('.')[1]
+        eparts = []
+        tail = None
+        action = None
+        area = None
+        bm = {}
+        if not isinstance(entity, str): continue
+        if entity.endswith('_dimmer'): continue
+        if not entity.startswith('btn_'): continue
+        eparts = entity.split('_')
+        eparts.pop(0)
+        tail = eparts.pop(-1)
+        if tail not in self.keypads_isy: continue
+        keypad = self.keypads_isy.get(tail)
+        action = '-'.join(eparts)
+
+        if action == 'wh-colors':
+          ppp = 12
+
+        bm = keypad.get('button_map')
+        keypad_path = keypad.get('path')
+        area = keypad_path.split('/')[0]
+        
+        if bm: action = bm.get(action, action)
+        if '/' in action:
+          area = action.split('/')[0]
+          action = action.replace(f"{area}/", "")
+        
+        # if action: 
+        #   if '/' in action: 
+        #     area = action.split('/')[0]
+        #     action = action.replace(f"{area}/", '')
+        btn = {'area': area, 'action': action}
+        self.buttons_isy[e] = btn
     return
 
 class x2y(u3.U3):
@@ -99,7 +142,8 @@ class x2y(u3.U3):
           tparts = topic.split('/')
           t = head + tparts + tail
           self.add_mqtt_trigger({'topic': '/'.join(t)})
-    elif entity: self.add_state_trigger({'entity': entity})
+    elif entity: 
+      self.add_state_trigger({'entity': entity})
     # endregion
     # region Actions
     action = self.P('action')
@@ -117,8 +161,8 @@ class x2y(u3.U3):
     data['control'] = control
     if entity: data['entity'] = entity
     if not control: return
-    if entity.split('.')[1].startswith('btn_'):
-      if self.transformer == 'ISY2Action': self.ISYAction(entity, data)
+    if entity in self.universe.buttons_isy:
+      self.ISYAction(entity, data)
     elif self.transformer == 'ISY2Sensor':
       regex = self.P('trigger').get('regex')
       eparts = []
@@ -128,13 +172,13 @@ class x2y(u3.U3):
         except: return
         self.ISYSensor(eparts, data)
   def ISYAction(self, entity, data):
-    if '.' in entity: entity = entity.split('.')[1]
-    eparts = entity.split('_')
-    tail = eparts[-1]
-    path = self.U('isy_keypad_synonyms').get(tail)
-    tparts = path.split('/')
-    area = tparts[0]
-    action = self.universe.isy_actions.get(entity)
+    btn = self.universe.buttons_isy.get(entity)
+    if not btn: 
+      self.Error(f"ISY Action {entity}, {data}")
+      retirm
+    area = btn.get('area')
+    action = btn.get('action')
+    path = btn.get('path')
     control = data.get('control')
     self.api.fire_event(EVENT_ACTION, area = area, action = action, path = path, control = control)
     t = '/'.join([PREFIX_ACTION,area,action])

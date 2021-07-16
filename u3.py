@@ -39,6 +39,26 @@ T_EVENT = 'event'
 T_TIMER = 'timer'
 # endregion
 
+def super_low(d):
+  if isinstance(d,list):
+    r = []
+    for k in d:
+      if isinstance(k,str): v = k.lower()
+      elif isinstance(k, list) or isinstance(k, dict): v = super_low(k)
+      else: v = k
+      r.append(v)
+    return r
+  elif isinstance(d,dict):
+    r = {}
+    for k, v in d.items():
+      k = k.lower()
+      if isinstance(v, dict): v = super_low(v)
+      elif isinstance(v, str): v = v.lower()
+      r[k] = v
+    return r
+  elif isinstance(d, str): return d.lower()
+  return d
+
 class U3Base(ad.ADBase):
   api = None 
   mqtt = None
@@ -73,6 +93,7 @@ class U3Base(ad.ADBase):
   @abstractmethod
   def U(self, attribute: str): raise NotImplementedError
   def P(self, parameter: str): return self.args.get(parameter)
+  def p(self, parameter: str): return super_low(self.P(parameter))
   def Warn(self, msg): self.__log(WARNING, msg)
   def Error(self, msg): self.__log(ERROR, msg)
   def Debug(self, msg): self.__log(DEBUG, msg)
@@ -100,8 +121,9 @@ class U3(U3Base):
   def terminate(self):
     for t in self.triggers: pass
   def U(self, attribute: str):
+    if not self.universe: return
     try: value = self.universe.P(attribute)
-    except: value = None
+    except: self.error(f"Lost the universe {self.config}")
     return value
 
   def add_triggers(self, triggers = []):
