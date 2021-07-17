@@ -79,23 +79,13 @@ class Creekview(u3.Universe):
         if tail not in self.keypads_isy: continue
         keypad = self.keypads_isy.get(tail)
         action = '-'.join(eparts)
-
-        if action == 'wh-colors':
-          ppp = 12
-
         bm = keypad.get('button_map')
         keypad_path = keypad.get('path')
         area = keypad_path.split('/')[0]
-        
         if bm: action = bm.get(action, action)
         if '/' in action:
           area = action.split('/')[0]
           action = action.replace(f"{area}/", "")
-        
-        # if action: 
-        #   if '/' in action: 
-        #     area = action.split('/')[0]
-        #     action = action.replace(f"{area}/", '')
         btn = {'area': area, 'action': action}
         self.buttons_isy[e] = btn
     return
@@ -123,6 +113,7 @@ class x2y(u3.U3):
     # region Triggers  
     trigger = self.P('trigger')
     if trigger: self.trigger = trigger
+    else: return
     event = trigger.get('event')
     topic = trigger.get('topic')
     entity = trigger.get('entity')
@@ -131,9 +122,7 @@ class x2y(u3.U3):
       list = topic.get('list')
       operand = topic.get('operand')
       topics = []
-      if list and operand and operand == 'keys':
-        try: topics = self.U(list).keys()
-        except: self.Error(f"Invalid mapping {topic} got {self.U(list)}")
+      if list and operand and operand == 'keys': topics = self.universe.keypads_i2.keys()
       if topics:
         self.trigger_topics = topics
         head = trigger.get('head').split('/')
@@ -142,8 +131,7 @@ class x2y(u3.U3):
           tparts = topic.split('/')
           t = head + tparts + tail
           self.add_mqtt_trigger({'topic': '/'.join(t)})
-    elif entity: 
-      self.add_state_trigger({'entity': entity})
+    elif entity: self.add_state_trigger({'entity': entity})
     # endregion
     # region Actions
     action = self.P('action')
@@ -161,8 +149,7 @@ class x2y(u3.U3):
     data['control'] = control
     if entity: data['entity'] = entity
     if not control: return
-    if entity in self.universe.buttons_isy:
-      self.ISYAction(entity, data)
+    if self.transformer == 'ISY2Action': self.ISYAction(entity, data)
     elif self.transformer == 'ISY2Sensor':
       regex = self.P('trigger').get('regex')
       eparts = []
@@ -175,7 +162,7 @@ class x2y(u3.U3):
     btn = self.universe.buttons_isy.get(entity)
     if not btn: 
       self.Error(f"ISY Action {entity}, {data}")
-      retirm
+      return
     area = btn.get('area')
     action = btn.get('action')
     path = btn.get('path')
@@ -246,8 +233,8 @@ class x2y(u3.U3):
     if tparts[-1] in "12345678":
       button = int(tparts.pop(-1))
       path = '/'.join(tparts)
-      actions = self.universe.i2_actions.get(path)
-      if not actions: actions = self.universe.i2_actions.get(topic)
+      actions = self.universe.keypads_i2.get(path).get('buttons')
+      if not actions: actions = self.universe.keypads_i2.get(topic).get('buttons')
       if actions: action = actions[button-1]
     return (area,action)
   def I2PayloadParser(self, payload) -> str:
@@ -283,3 +270,18 @@ class x2y(u3.U3):
           return
         except: continue
     # endregion
+
+class Indicator(u3.U3):
+  def initialize(self):
+    super().initialize()
+    super().load()
+    self.add_mqtt_trigger({"topic": "ind/#"})
+  def cb_mqtt(self, data):
+    topic = data.get('topic')
+    payload = data.get('payload').lower()
+    entity = f"switch.{topic.replace('/','_')}"
+    #if self.api.entity_exists(entity):
+    if payload in ['on']:
+      self.hass.call_service("homeassistant/turn_on", entity_id = entity)
+    elif payload in ['off']:
+      self.hass.call_service("homeassistant/turn_off", entity_id = entity)
