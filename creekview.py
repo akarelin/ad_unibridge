@@ -326,7 +326,7 @@ class Indicator(u3.U3):
   def cb_mqtt(self, data):
     topic = data.get('topic')
     payload = data.get('payload').lower()
-    if self.transformer == 'Indicator2Switch': self.Indicator2Switch(data)
+    if self.transformer == 'Indicator2Switch': self.Indicator2Switch(topic, payload)
   def Indicator2Switch(self, data):
     entity = f"switch.{topic.replace('/','_')}"
     if payload in ['on','off']: self.hass.call_service(f"homeassistant/turn_{payload}", entity_id = entity)
