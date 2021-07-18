@@ -118,9 +118,6 @@ class x2y(u3.U3):
     else: return
     event = trigger.get('event')
     topic = trigger.get('topic')
-    # if not topic:
-    #   topics = [t.get('topic') for t in self.triggers if t.get('type') == T_MQTT]
-    #   if topics: topic = topics[0]
     entity = trigger.get('entity')
     singles_list = trigger.get('singles_list')
     if event: self.add_event_trigger({'event': event})
@@ -160,8 +157,9 @@ class x2y(u3.U3):
 
   # region Events. Used by ISY
   def cb_event(self, data):
+    if data.get('event') == EVENT_ISY: self.ISYEvent(data)
+  def ISYEvent(self, data):
     event, entity, control = data.pop('event'), data.pop('entity_id'), data.pop('control')
-    if event != EVENT_ISY: return
     if not entity: return
     if not control or control in IGNORE_ISY_EVENTS: return
     if control[0] == 'D': control = control[1:]
@@ -177,6 +175,14 @@ class x2y(u3.U3):
         try: eparts = re.findall(regex, entity)[0].split('_')
         except: return
         self.ISYSensor(eparts, data)
+  # def ISYEventParser(self, data):
+  #   control = data.get('control')
+  #   if not control or control in IGNORE_ISY_EVENTS: return
+  #   if control[0] == 'D': control = control[1:]
+  #   event, entity = data.pop('event'), data.pop('entity_id')
+  #   if event != EVENT_ISY: return
+  #   if entity: data['entity'] = entity
+  #   return data
   def ISYAction(self, entity, data):
     btn = self.universe.buttons_isy.get(entity)
     if not btn: 
@@ -189,7 +195,6 @@ class x2y(u3.U3):
     self.api.fire_event(EVENT_ACTION, area = area, action = action, path = path, control = control)
     t = '/'.join([PREFIX_ACTION,area,action])
     self.mqtt.mqtt_publish(t, control)
-
   def ISYSensor(self, eparts, data):
     if 'btn' in eparts: return
     entails = self.U('isy_entity_tails')
@@ -221,14 +226,6 @@ class x2y(u3.U3):
     eparts.append(tail)
     topic = '/'.join([PREFIX_SENSOR]+eparts)
     self.mqtt.mqtt_publish(topic, value)
-  def ISYEventParser(self, data):
-    control = data.get('control')
-    if not control or control in IGNORE_ISY_EVENTS: return
-    if control[0] == 'D': control = control[1:]
-    event, entity = data.pop('event'), data.pop('entity_id')
-    if event != EVENT_ISY: return
-    if entity: data['entity'] = entity
-    return data
   # endregion
   # region MQTT. Used by I2
   def cb_mqtt(self, data):
