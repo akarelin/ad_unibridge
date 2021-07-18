@@ -18,10 +18,11 @@ EVENT_ISY = 'isy994_control'
 PREFIX_SENSOR = 'sensor'
 PREFIX_POWER = 'power'
 IGNORE_KPARTS: List = ['kp','insteon','state']
-IGNORE_ISY_EVENTS: List = ['RR','OR','ST']
+IGNORE_ISY_EVENTS: List = ['RR','OR','ST','OL']
 MAX_EVENT_AGE = 10
 IND_TYPE_I2 = 'i2'
 IND_TYPE_INSTEON = 'insteon'
+AREA_NONE = 'UNSPECIFIED_AREA'
 from u3 import T_MQTT
 SCHEMA_ACTION = {
     vol.Exclusive('transformer', 'action'):{vol.Required('transformer'): str}
@@ -30,10 +31,12 @@ SCHEMA_ACTION = {
 
 class Creekview(u3.Universe):
   synonyms = {}
+  keypads = []
   keypads_isy = {}
   keypads_i2 = {}
   buttons_isy = {}
   areamap = {}
+  actions = {}
 
   def initialize(self):
     super().initialize()
@@ -45,6 +48,8 @@ class Creekview(u3.Universe):
     self.LoadAreas()
     self.LoadKeypads()
     self.LoadEntities()
+    self.actions = self.p('actions')
+    return
   def terminate(self): super().terminate()
 
   def LoadAreas(self): 
@@ -56,10 +61,17 @@ class Creekview(u3.Universe):
         for subarea,synonym in subsyn.items(): self.areamap[subarea] = synonym
   
   def LoadKeypads(self):
-    keypads = self.p('keypads')
+    keypads = []
+    for keypad_config_section, area in [('keypads'+a[len('keypads'):],a[len('keypads-'):]) for a in self.args.keys() if a.startswith('keypads')]:
+      keypad_group = self.p(keypad_config_section)
+      for keypad in keypad_group:
+        if area: keypad['path'] = f"{area}/{keypad.get('path')}"
+        keypad['area'] = keypad.get('path').split('/')[0]
+        keypads.append(keypad)
+    self.keypads = keypads
     for k in keypads:
-      path = k.get('path')
-      area = path.split('/')[0]
+      path = k.get('path').lower()
+      area = k.get('area')
       tail = k.get('tail')
       if tail: self.keypads_isy[tail] = {'area': area, 'path': path, 'button_map': k.get('button_map')}
       else: self.keypads_i2[path] = {'area': area, 'buttons': k.get('buttons')}
@@ -100,6 +112,40 @@ class x2y(u3.U3):
   trigger = None
   action_conditions = {}
 
+  def InitTrigger_Topic(self, trigger):
+    topic = trigger.get('topic')
+    list = topic.get('list')
+    operand = topic.get('operand')
+    topics = []
+    if list and operand and operand == 'keys': topics = self.universe.keypads_i2.keys()
+    if topics:
+      self.trigger_topics = topics
+      head = trigger.get('head').split('/')
+      tail = trigger.get('tail').split('/')
+      for topic in topics: 
+        tparts = topic.split('/')
+        t = head + tparts + tail
+        self.add_mqtt_trigger({'topic': '/'.join(t)})
+
+  def InitTrigger_State(self, trigger):
+    singles_list = trigger.get('singles_list')
+    self.transformer = 'Sensor2Topic'
+    list_info = self.U(singles_list)
+    value_template  = list_info.get('value_template')
+    domain = list_info.get('domain')
+    conditions = list_info.get('conditions')
+    action_template = list_info.get('action_template')
+    if action_template and value_template and conditions and isinstance(conditions, dict):
+      for slug, condition in conditions.items():
+        topic = self.hass.render_template(action_template.replace('SLUG',slug))
+        if ' ' in condition: (entity, operand) = condition.split(' ', 1)
+        else: (entity, operand) = (condition, '')
+        if domain and not entity.startswith(domain): entity = f"{domain}.{entity}"
+        condition = value_template.replace('ENTITY', entity).replace('OPERAND', operand)
+        self.action_conditions[entity] = {'condition': condition, 'action': topic}
+        self.add_state_trigger({'entity': entity})
+    self.transformer = 'Sensor2Topic'
+
   def initialize(self):
     super().initialize()
     schema_trigger = {
@@ -113,6 +159,8 @@ class x2y(u3.U3):
       }}
     super().load({**schema_trigger, **SCHEMA_ACTION})
     # region Triggers  
+    action = self.P('action')
+    if action: self.transformer = action.get('transformer')
     trigger = self.P('trigger')
     if trigger: self.trigger = trigger
     else: return
@@ -121,39 +169,17 @@ class x2y(u3.U3):
     entity = trigger.get('entity')
     singles_list = trigger.get('singles_list')
     if event: self.add_event_trigger({'event': event})
-    elif topic:
-      list = topic.get('list')
-      operand = topic.get('operand')
-      topics = []
-      if list and operand and operand == 'keys': topics = self.universe.keypads_i2.keys()
-      if topics:
-        self.trigger_topics = topics
-        head = trigger.get('head').split('/')
-        tail = trigger.get('tail').split('/')
-        for topic in topics: 
-          tparts = topic.split('/')
-          t = head + tparts + tail
-          self.add_mqtt_trigger({'topic': '/'.join(t)})
+    elif topic: self.InitTrigger_Topic(trigger)
     elif entity: self.add_state_trigger({'entity': entity})
-    elif singles_list:
-      list_info = self.U(singles_list)
-      value_template  = list_info.get('value_template')
-      domain = list_info.get('domain')
-      conditions = list_info.get('conditions')
-      action_template = list_info.get('action_template')
-      if action_template and value_template and conditions and domain and isinstance(conditions, dict):
-        for slug, condition in conditions.items():
-          topic = self.hass.render_template(action_template.replace('SLUG',slug))
-          if ' ' in condition: (entity, operand) = condition.split(' ', 1)
-          if not entity.startswith(domain): entity = f"{domain}.{entity}"
-          condition = value_template.replace('ENTITY', entity).replace('OPERAND', operand)
-          self.action_conditions[entity] = {'condition': condition, 'action': topic}
-          self.add_state_trigger({'entity': entity})
-      self.transformer = 'Sensor2Topic'
-      return
-    action = self.P('action')
-    if 'transformer' in action: self.transformer = action.get('transformer')
-    else: self.Error(f"Invalid action {action}")
+    elif singles_list: self.InitTrigger_State(trigger)
+  
+  def Publish(self, area: str, action: str, control: str):
+    self.api.fire_event(EVENT_ACTION, area = area, action = action, control = control)
+    self.mqtt.mqtt_publish(f"{PREFIX_ACTION}/{area}/{action}", control)
+  def Act(self, area: str, action: str, control: str):
+    try: entities = self.universe.actions[area.lower()][action.lower()]['switch']
+    except: self.Publish(area, action, control)
+    else: self.hass.call_service(f"homeassistant/turn_{'on' if control == 'ON' else 'off'}", entity_id = entities)
 
   # region Events. Used by ISY
   def cb_event(self, data):
@@ -175,14 +201,6 @@ class x2y(u3.U3):
         try: eparts = re.findall(regex, entity)[0].split('_')
         except: return
         self.ISYSensor(eparts, data)
-  # def ISYEventParser(self, data):
-  #   control = data.get('control')
-  #   if not control or control in IGNORE_ISY_EVENTS: return
-  #   if control[0] == 'D': control = control[1:]
-  #   event, entity = data.pop('event'), data.pop('entity_id')
-  #   if event != EVENT_ISY: return
-  #   if entity: data['entity'] = entity
-  #   return data
   def ISYAction(self, entity, data):
     btn = self.universe.buttons_isy.get(entity)
     if not btn: 
@@ -192,9 +210,7 @@ class x2y(u3.U3):
     action = btn.get('action')
     path = btn.get('path')
     control = data.get('control')
-    self.api.fire_event(EVENT_ACTION, area = area, action = action, path = path, control = control)
-    t = '/'.join([PREFIX_ACTION,area,action])
-    self.mqtt.mqtt_publish(t, control)
+    self.Publish(area, action, control)
   def ISYSensor(self, eparts, data):
     if 'btn' in eparts: return
     entails = self.U('isy_entity_tails')
@@ -232,13 +248,17 @@ class x2y(u3.U3):
     topic = data.get('topic')
     payload = data.get('payload')
     if self.transformer == 'I2Action': self.I2Action(topic, payload)
+    elif self.transformer == 'MQTT2Action': self.MQTT2Action(topic, payload)
+  def MQTT2Action(self, topic, payload):
+    control = payload
+    tparts = topic.split('/')
+    tparts.remove(PREFIX_ACTION)
+    if len(tparts) == 2: self.Act(tparts[0], tparts[1], control)
   def I2Action(self, topic, payload):
     control = self.I2PayloadParser(payload)
     if control: 
       area,action = self.I2TopicParser(topic)
-      if not action: return
-      self.api.fire_event(EVENT_ACTION, area = area, action = action, control = control)
-      self.mqtt.mqtt_publish(f"{PREFIX_ACTION}/{area}/{action}", control)
+      self.Act(area, action, control)
   def I2TopicParser(self, topic) -> (str,str):
     action = None
     head = self.trigger.get('head')
@@ -266,7 +286,6 @@ class x2y(u3.U3):
     if reason not in ['device']: return
     return 'F' if p.get('mode').upper() in ['FAST'] else "" + p.get('state')[:2].upper()
   # endregion
-  # region 
   # region State. Used for power sensing and new style indicatior-actions
   def cb_state(self, entity, attribute, old, new, kwargs):
     if self.transformer == 'Attribute2Sensor': self.Attribute2Sensor(entity, new)
@@ -293,16 +312,6 @@ class x2y(u3.U3):
       try: control = self.hass.render_template(condition)
       except: return
       self.mqtt.mqtt_publish(action, control)
-      
-
-
-      
-      
-
-
-
-
-
   # endregion
 
 class Indicator(u3.U3):
@@ -317,8 +326,7 @@ class Indicator(u3.U3):
   def cb_mqtt(self, data):
     topic = data.get('topic')
     payload = data.get('payload').lower()
-    if self.transformer == 'Indicator2Switch':
-      self.Indicator2Switch(data)
+    if self.transformer == 'Indicator2Switch': self.Indicator2Switch(data)
   def Indicator2Switch(self, data):
     entity = f"switch.{topic.replace('/','_')}"
     if payload in ['on','off']: self.hass.call_service(f"homeassistant/turn_{payload}", entity_id = entity)

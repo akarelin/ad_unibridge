@@ -116,7 +116,8 @@ class U3(U3Base):
       try: self.universe = self.api.get_app(dep)
       except: continue
       else: break
-    if not self.universe: self.Error(f"Unable to connect to the universe {self.args}")
+    if self.universe: self.add_triggers()
+    else: self.Error(f"Unable to connect to the universe {self.args}")
   def load(self, schema = {}): super().load(schema)
   def terminate(self):
     for t in self.triggers: pass
@@ -203,3 +204,5 @@ class Universe(U3Base):
   def areas(self) -> list: return {k.lower(): v for k,v in self.P('areas').items()}
   @property
   def Areas(self) -> list: return self.P('areas')
+  @property
+  def DryRun(self) -> list: return self.P('dry_run')
